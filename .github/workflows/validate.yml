@@ -1,0 +1,27 @@
+name: Validate SakthiAI flagship
+on:
+  pull_request:
+  push:
+    branches: [main, release/flagship-v1]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Structural and safety validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f index.html
+          test -f assets/styles.css
+          test -f assets/app.js
+          test -f manifest.webmanifest
+          test -f sw.js
+          test -f offline.html
+          grep -q 'SakthiAI' index.html
+          grep -q 'prefers-reduced-motion' assets/styles.css
+          grep -q 'serviceWorker' assets/app.js
+          grep -q 'No hidden autonomous writes' index.html
+          ! grep -Rni 'Access-Control-Allow-Origin: \*' . --exclude-dir=.git
