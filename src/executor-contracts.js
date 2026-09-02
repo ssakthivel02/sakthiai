@@ -38,11 +38,14 @@ export function validateExecutionEnvelope(input={}){
   if(consequential&&!text(input.approvalId,160))return {ok:false,code:'EXECUTOR_APPROVAL_REQUIRED'};
   if(consequential&&input.approvalState!=='approved')return {ok:false,code:'EXECUTOR_APPROVAL_NOT_APPROVED'};
   if(input.externalActionsEnabled!==true&&contract.id!=='sandbox_code')return {ok:false,code:'EXTERNAL_ACTIONS_DISABLED'};
-  return {ok:true,envelope:{taskId,tenantId,actionClass,executorContractId:contract.id,idempotencyKey,approvalId:input.approvalId||null,verifierId,evidenceRequirements,rollbackPlan,dryRun:input.dryRun!==false,lifecycle:[...LIFECYCLE]},contract};
+  const dryRun=input.dryRun!==false;
+  if(!dryRun&&input.executorBindingEnabled!==true)return {ok:false,code:'EXECUTOR_BINDING_GATE_DISABLED'};
+  if(!dryRun&&input.executorBound!==true)return {ok:false,code:'EXECUTOR_NOT_BOUND'};
+  return {ok:true,envelope:{taskId,tenantId,actionClass,executorContractId:contract.id,idempotencyKey,approvalId:input.approvalId||null,verifierId,evidenceRequirements,rollbackPlan,dryRun,lifecycle:[...LIFECYCLE]},contract};
 }
 
 export function buildDryRunReceipt(input={}){
-  const validation=validateExecutionEnvelope({...input,externalActionsEnabled:input.externalActionsEnabled===true});
+  const validation=validateExecutionEnvelope({...input,dryRun:true,externalActionsEnabled:input.externalActionsEnabled===true});
   if(!validation.ok)return validation;
   return {ok:true,receipt:{status:'DRY_RUN_CONTRACT_VALIDATED',executed:false,sideEffects:false,executorBound:false,envelope:validation.envelope,requiredControls:[...validation.contract.requiredControls]}};
 }
