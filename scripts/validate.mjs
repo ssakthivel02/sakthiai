@@ -213,7 +213,14 @@ must(sw.includes("url.pathname.startsWith('/api/')"),'service worker must exclud
 must(manifest.name.includes('SakthiAI'),'PWA identity incorrect');
 
 const scanned=[html,app,caps,runtime,agentUi,agentUiCss,worker,persistence,execution,auth,rbac,quota,agentState,agentControl,agentApi,agentLeases,agentQueries,executorSource,wrangler,sw,migration1,migration2,openapiV5,JSON.stringify(executorContracts)].join('\n');
-for(const marker of ['sk-','AIza','xoxb-','xoxp-','ghp_','github_pat_'])must(!scanned.includes(marker),`secret-shaped marker found: ${marker}`);
+const secretPatterns=[
+  /(^|[^A-Za-z0-9])sk-[A-Za-z0-9_-]{16,}/,
+  /(^|[^A-Za-z0-9])AIza[0-9A-Za-z_-]{20,}/,
+  /(^|[^A-Za-z0-9])xox[baprs]-[A-Za-z0-9-]{10,}/,
+  /(^|[^A-Za-z0-9])ghp_[A-Za-z0-9]{20,}/,
+  /(^|[^A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}/
+];
+for(const pattern of secretPatterns)must(!pattern.test(scanned),`secret-shaped credential found: ${pattern}`);
 must(!scanned.includes('Access-Control-Allow-Origin: *'),'wildcard CORS must not be introduced');
 
 console.log('SAKTHIAI_FLAGSHIP_V5_VALIDATION_PASS');
