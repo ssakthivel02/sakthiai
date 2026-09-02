@@ -17,6 +17,9 @@ jobs:
           test -f index.html
           test -f assets/styles.css
           test -f assets/app.js
+          test -f assets/capabilities.js
+          test -f assets/runtime.js
+          test -f config/runtime-policy.json
           test -f manifest.webmanifest
           test -f sw.js
           test -f offline.html
@@ -24,4 +27,10 @@ jobs:
           grep -q 'prefers-reduced-motion' assets/styles.css
           grep -q 'serviceWorker' assets/app.js
           grep -q 'No hidden autonomous writes' index.html
+          grep -q '"enabled": false' config/runtime-policy.json
+          grep -q '"silentFallback": false' config/runtime-policy.json
+          grep -q '"legacyRuntimeImport": false' config/runtime-policy.json
+          grep -q "url.pathname.startsWith('/api/')" sw.js
           ! grep -Rni 'Access-Control-Allow-Origin: \*' . --exclude-dir=.git
+          ! grep -Rni 'saravanai.omsaravanabhava.org' assets config index.html --exclude-dir=.git
+          ! grep -RniE '(sk-|AIza|xox[baprs]-|ghp_|github_pat_)' assets config index.html --exclude-dir=.git
