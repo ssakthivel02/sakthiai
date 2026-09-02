@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "product": "SakthiAI",
+  "policyMode": "FREE_FIRST_FAIL_CLOSED",
+  "legacyRuntimeImport": false,
+  "paidProviders": {
+    "enabled": false,
+    "silentFallback": false,
+    "ownerApprovalRequiredToEnable": true
+  },
+  "externalWrites": {
+    "default": "APPROVAL_REQUIRED",
+    "autonomousPublishing": false,
+    "autonomousDeployment": false,
+    "autonomousMessaging": false,
+    "destructiveActions": false
+  },
+  "cloudResources": {
+    "d1": {
+      "activation": "ALLOWED_WHEN_NEEDED",
+      "costPosture": "FREE_PLAN_FIRST",
+      "overagePolicy": "FAIL_CLOSED_AT_FREE_LIMITS"
+    },
+    "r2": {
+      "activation": "DISABLED_UNTIL_OWNER_APPROVAL",
+      "reason": "Free allowance exists but usage beyond allowance can be billable."
+    },
+    "aiSearch": {
+      "activation": "DISABLED_UNTIL_RUNTIME_PHASE",
+      "costPosture": "OPEN_BETA_FREE_WITHIN_LIMITS",
+      "note": "Workers AI and AI Gateway usage are governed separately."
+    }
+  },
+  "frontend": {
+    "saravanaiDataDependency": false,
+    "saravanaiRuntimeDependency": false,
+    "fakeSuccessStates": false,
+    "apiCache": false,
+    "browserSecretStorage": false
+  }
+}
