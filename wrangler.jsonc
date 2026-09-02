@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sakthiai-flagship-api",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "vars": {
+    "AI_RUNTIME_ENABLED": "false",
+    "PAID_PROVIDERS_ENABLED": "false",
+    "LEGACY_RUNTIME_IMPORT": "false",
+    "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fp8-fast"
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
