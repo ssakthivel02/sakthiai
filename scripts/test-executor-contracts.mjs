@@ -45,6 +45,17 @@ assert.equal(externalLocked.code,'EXTERNAL_ACTIONS_DISABLED');
 const contractOnlyExternal=validateExecutionEnvelope({...base,actionClass:'repository_write',approvalId:'apr_test',approvalState:'approved',externalActionsEnabled:true});
 assert.equal(contractOnlyExternal.ok,true);
 assert.equal(contractOnlyExternal.envelope.executorContractId,'repository');
+assert.equal(contractOnlyExternal.envelope.dryRun,true);
+
+const bindingGateOff=validateExecutionEnvelope({...base,actionClass:'read_only',dryRun:false,externalActionsEnabled:false,executorBindingEnabled:false,executorBound:false});
+assert.equal(bindingGateOff.code,'EXECUTOR_BINDING_GATE_DISABLED');
+
+const noConcreteBinding=validateExecutionEnvelope({...base,actionClass:'read_only',dryRun:false,externalActionsEnabled:false,executorBindingEnabled:true,executorBound:false});
+assert.equal(noConcreteBinding.code,'EXECUTOR_NOT_BOUND');
+
+const contractEnvelopeOnly=validateExecutionEnvelope({...base,actionClass:'read_only',dryRun:false,externalActionsEnabled:false,executorBindingEnabled:true,executorBound:true});
+assert.equal(contractEnvelopeOnly.ok,true);
+assert.equal(contractEnvelopeOnly.envelope.dryRun,false);
 
 const dryRun=buildDryRunReceipt({...base,actionClass:'deploy',approvalId:'apr_deploy',approvalState:'approved',externalActionsEnabled:true});
 assert.equal(dryRun.ok,true);
