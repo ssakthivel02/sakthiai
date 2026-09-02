@@ -3,6 +3,19 @@ PRAGMA foreign_keys = ON;
 INSERT OR REPLACE INTO schema_meta(key,value,updated_at)
 VALUES ('schema_version','2',CURRENT_TIMESTAMP);
 
+CREATE TABLE IF NOT EXISTS task_execution_policy (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  task_id TEXT NOT NULL UNIQUE,
+  action_class TEXT NOT NULL DEFAULT 'read_only' CHECK(action_class IN ('read_only','internal_write','repository_write','external_write','publish','message','deploy','destructive')),
+  external_action INTEGER NOT NULL DEFAULT 0 CHECK(external_action IN (0,1)),
+  destructive_action INTEGER NOT NULL DEFAULT 0 CHECK(destructive_action IN (0,1)),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS task_checkpoints (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
@@ -61,6 +74,7 @@ CREATE TABLE IF NOT EXISTS evidence_records (
   FOREIGN KEY (verifier_run_id) REFERENCES verifier_runs(id) ON DELETE SET NULL
 );
 
+CREATE INDEX IF NOT EXISTS idx_execution_policy_tenant ON task_execution_policy(tenant_id,task_id);
 CREATE INDEX IF NOT EXISTS idx_checkpoints_task_sequence ON task_checkpoints(tenant_id,task_id,sequence_no DESC);
 CREATE INDEX IF NOT EXISTS idx_leases_tenant_expires ON worker_leases(tenant_id,expires_at);
 CREATE INDEX IF NOT EXISTS idx_verifier_task_created ON verifier_runs(tenant_id,task_id,created_at DESC);
