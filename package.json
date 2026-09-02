@@ -1,12 +1,14 @@
 {
   "name": "sakthiai-flagship",
-  "version": "0.2.0-hi-tech-v2-foundation",
+  "version": "0.3.0-hi-tech-v3-security-foundation",
   "private": true,
   "type": "module",
-  "description": "Clean SakthiAI Intelligence OS with fail-closed AI, durable-data and execution contracts.",
+  "description": "Clean SakthiAI Intelligence OS with verified identity, tenant RBAC, fail-closed quotas and dormant durable runtime contracts.",
   "scripts": {
-    "test": "node scripts/validate.mjs",
-    "validate": "node scripts/validate.mjs"
+    "validate": "node scripts/validate.mjs",
+    "test:auth": "node scripts/test-auth.mjs",
+    "test:migration": "python3 scripts/test_d1_migration.py",
+    "test": "npm run validate && npm run test:auth && npm run test:migration"
   },
   "engines": {
     "node": ">=20"
