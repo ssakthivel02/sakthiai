@@ -104,12 +104,21 @@ These contracts do not claim execution. Their runtime gates default disabled and
 
 ## Validation
 
-The flagship CI now runs:
+The flagship CI runs:
 
 1. structural and safety validation
 2. machine-readable V3 policy validation
 3. a real RSA-signed Cloudflare Access JWT verification test
 4. a real SQLite execution test of the D1 migration and tenant-isolation model
+
+Latest exact-head evidence before this documentation-only record:
+
+- commit `3f32c402e47baec677507646359e81e5c73cae95`
+- GitHub Actions `Validate SakthiAI flagship` run #43: **SUCCESS**
+- structural/safety: PASS
+- V3 policy validator: PASS
+- Access JWT cryptographic test: PASS
+- D1 migration + tenant-isolation test: PASS
 
 A green CI run proves those repository-level contracts only. It does **not** mean production identity, D1, DNS or AI runtime has been activated.
 
