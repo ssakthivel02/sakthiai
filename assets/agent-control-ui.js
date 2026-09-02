@@ -3,7 +3,12 @@
   const SECTION_ID='agent-control-center';
   const esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   function addStyle(){if(document.getElementById(STYLE_ID))return;const link=document.createElement('link');link.id=STYLE_ID;link.rel='stylesheet';link.href='assets/agent-control.css';document.head.appendChild(link);}
-  function addNav(){const nav=document.getElementById('primaryNav');if(!nav||nav.querySelector('a[href="#agent-control-center"]'))return;const link=document.createElement('a');link.href='#agent-control-center';link.textContent='Control Center';const trust=nav.querySelector('a[href="#trust"]');nav.insertBefore(link,trust||null);}
+  function addNav(){
+    const nav=document.getElementById('primaryNav');if(!nav||nav.querySelector('a[href="#agent-control-center"]'))return;
+    const link=document.createElement('a');link.href='#agent-control-center';link.textContent='Control Center';
+    link.addEventListener('click',()=>{nav.classList.remove('open');const menu=document.getElementById('menuButton');menu?.setAttribute('aria-expanded','false');});
+    const trust=nav.querySelector('a[href="#trust"]');nav.insertBefore(link,trust||null);
+  }
   function shell(){
     if(document.getElementById(SECTION_ID))return document.getElementById(SECTION_ID);
     const anchor=document.getElementById('agents');if(!anchor)return null;
@@ -16,7 +21,7 @@
             <span>Control plane <b id="accControl">LOCKED</b></span>
             <span>External actions <b id="accExternal">LOCKED</b></span>
             <span>Trusted verifier <b id="accVerifier">LOCKED</b></span>
-            <span>Executor binding <b id="accExecutor">NONE</b></span>
+            <span>Executor binding <b id="accExecutor">LOCKED / NONE</b></span>
           </div>
         </div>
         <div class="agent-control-grid">
@@ -29,11 +34,11 @@
             </div>
             <div class="agent-panel">
               <div class="agent-panel-head"><strong>Durable task graph</strong><span>Tenant data not loaded</span></div>
-              <div class="agent-task-board">
-                <div class="agent-task-column"><span>PLANNED / QUEUED</span><p>No verified tenant task feed is connected.</p></div>
-                <div class="agent-task-column"><span>RUNNING / PAUSED</span><p>Worker execution remains unavailable in this foundation.</p></div>
-                <div class="agent-task-column"><span>APPROVAL</span><p>Approval queue stays protected behind verified identity and owner/admin RBAC.</p></div>
-                <div class="agent-task-column"><span>VERIFY / COMPLETE</span><p>Completion requires trusted verifier PASS; self-certification is prohibited.</p></div>
+              <div class="agent-job-board">
+                <div class="agent-job-column"><span>PLANNED / QUEUED</span><p>No verified tenant task feed is connected.</p></div>
+                <div class="agent-job-column"><span>RUNNING / PAUSED</span><p>Worker execution remains unavailable in this foundation.</p></div>
+                <div class="agent-job-column"><span>APPROVAL</span><p>Approval queue stays protected behind verified identity and owner/admin RBAC.</p></div>
+                <div class="agent-job-column"><span>VERIFY / COMPLETE</span><p>Completion requires trusted verifier PASS; self-certification is prohibited.</p></div>
               </div>
             </div>
             <div class="agent-panel">
@@ -52,13 +57,13 @@
     anchor.insertAdjacentElement('afterend',section);return section;
   }
   function setBadge(id,value,ok=false){const el=document.getElementById(id);if(!el)return;el.textContent=value;el.classList.toggle('ok',Boolean(ok));}
-  function renderContracts(registry){
-    const root=document.getElementById('accContracts');if(!root)return;
-    const contracts=Array.isArray(registry?.contracts)?registry.contracts:[];
-    document.getElementById('accContractCount').textContent=`${contracts.filter(x=>x.state!=='NO_EXECUTOR_BOUND').length} bound / ${contracts.length} contracts`;
-    if(!contracts.length){root.innerHTML='<div class="agent-empty">No verified executor contract registry was returned. External execution remains unavailable.</div>';return;}
+  function renderContracts(body){
+    const registry=body?.registry||{};const root=document.getElementById('accContracts');if(!root)return;
+    const contracts=Array.isArray(registry?.contracts)?registry.contracts:[];const bound=contracts.filter(x=>x.state!=='NO_EXECUTOR_BOUND').length;
+    document.getElementById('accContractCount').textContent=`${bound} bound / ${contracts.length} contracts`;
+    if(!contracts.length){root.innerHTML='<div class="agent-empty">No verified executor contract registry was returned. External execution remains unavailable.</div>';setBadge('accExecutor','LOCKED / NONE',false);return;}
     root.innerHTML=contracts.map(item=>`<article class="agent-contract-card"><div><strong>${esc(item.label||item.id)}</strong><b>${esc(item.state||'UNKNOWN')}</b></div><p>${esc((item.actionClasses||[]).join(' · '))}</p></article>`).join('');
-    setBadge('accExecutor',contracts.some(x=>x.state!=='NO_EXECUTOR_BOUND')?'BOUND':'NONE',false);
+    setBadge('accExecutor',body?.bindingGateEnabled?(bound?'BOUND':'ENABLED / NONE'):'LOCKED / NONE',false);
     const lifecycle=Array.isArray(registry?.lifecycle)?registry.lifecycle:[];
     if(lifecycle.length){document.getElementById('accLifecycle').innerHTML=lifecycle.map(x=>`<span>${esc(String(x).replaceAll('_',' '))}</span>`).join('');}
   }
@@ -74,14 +79,14 @@
       setBadge('accControl',state.state==='AVAILABLE'?'AVAILABLE':String(state.state||'LOCKED').replaceAll('_',' '),state.state==='AVAILABLE');
       setBadge('accExternal',state.externalActions==='enabled'?'ENABLED':'LOCKED',false);
       setBadge('accVerifier',state.verifierRuntime==='enabled'?'ENABLED':'LOCKED',false);
-      renderContracts(contracts?.registry);
+      renderContracts(contracts);
       document.getElementById('accLifecycleState').textContent=contracts?.registry?.externalExecutionImplemented?'EXECUTION IMPLEMENTED':'CONTRACT ONLY';
       if(note)note.textContent='Verified control-plane metadata loaded. No tenant tasks, credentials or external actions were requested.';
     }catch(error){
-      setBadge('accControl','LOCKED',false);setBadge('accExternal','LOCKED',false);setBadge('accVerifier','LOCKED',false);setBadge('accExecutor','NONE',false);
+      setBadge('accControl','LOCKED',false);setBadge('accExternal','LOCKED',false);setBadge('accVerifier','LOCKED',false);setBadge('accExecutor','LOCKED / NONE',false);
       if(note)note.textContent='Control-plane metadata is unavailable on this host. The Agent Control Center remains fail-closed and no action was attempted.';
     }
   }
-  function init(){addStyle();addNav();if(!shell())return;document.getElementById('accRefresh')?.addEventListener('click',refresh);document.getElementById('accOpenAgents')?.addEventListener('click',()=>document.querySelector('[data-capability="agents"]')?.click());window.addEventListener('sakthiai:runtime',()=>refresh());if(window.SakthiRuntime?.state?.apiConnected)refresh();}
+  function init(){addStyle();addNav();if(!shell())return;document.getElementById('accRefresh')?.addEventListener('click',refresh);document.getElementById('accOpenAgents')?.addEventListener('click',()=>{document.querySelector('[data-capability="agents"]')?.click();document.getElementById('workspace')?.scrollIntoView({behavior:'smooth',block:'start'});});window.addEventListener('sakthiai:runtime',()=>refresh());if(window.SakthiRuntime?.state?.apiConnected)refresh();}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
