@@ -1,5 +1,8 @@
 import {persistenceState,listProjects,createProject,listTasks,createPlannedTask} from './persistence.js';
 import {researchContract,codeContract,agentContract,knowledgeContract} from './execution-contracts.js';
+import {authenticateRequest,identityState} from './auth.js';
+import {authorizeTenant} from './rbac.js';
+import {quotaPolicy,enforceQuota,recordUsage} from './quota.js';
 
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer"};
 
@@ -7,11 +10,19 @@ function json(body,status=200,extra={}){return new Response(JSON.stringify(body)
 function requestId(){return `sai_${Date.now()}_${crypto.randomUUID().slice(0,8)}`;}
 function bool(value){return String(value||'').toLowerCase()==='true';}
 function feature(env,name){return bool(env[name]);}
+function tenantSelector(request){return String(request.headers.get('x-sakthiai-tenant')||'').trim();}
+function securityStatus(code){
+  if(['RATE_LIMITED','DAILY_AI_QUOTA_EXCEEDED'].includes(code))return 429;
+  if(['RBAC_FORBIDDEN','TENANT_MEMBERSHIP_REQUIRED','TENANT_ACCESS_INACTIVE'].includes(code))return 403;
+  if(String(code||'').startsWith('ACCESS_JWT_')||code==='IDENTITY_REQUIRED')return 401;
+  return 503;
+}
 function policy(env){return {
   product:'SakthiAI',
   runtimeMode:bool(env.AI_RUNTIME_ENABLED)?'free-first-enabled':'disabled',
   persistence:persistenceState(env).state,
-  identity:feature(env,'IDENTITY_RUNTIME_ENABLED')?'enabled':'disabled',
+  identity:identityState(env).state,
+  quota:quotaPolicy(env),
   paidProvidersEnabled:false,
   silentPaidFallback:false,
   legacyRuntimeImport:false,
@@ -30,17 +41,17 @@ function policy(env){return {
   }
 };}
 function capabilityRegistry(env){const runtime=bool(env.AI_RUNTIME_ENABLED)&&Boolean(env.AI);const persistence=persistenceState(env).state;return [
-  {id:'chat',state:runtime?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true},
-  {id:'research',state:feature(env,'RESEARCH_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,evidenceRequired:true},
-  {id:'code',state:feature(env,'CODE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,sandboxRequired:true},
-  {id:'agents',state:feature(env,'AGENT_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,approvalGated:true},
-  {id:'automation',state:feature(env,'AUTOMATION_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,approvalGated:true},
+  {id:'chat',state:runtime?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,identityRequired:true,quotaRequired:true},
+  {id:'research',state:feature(env,'RESEARCH_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,evidenceRequired:true,identityRequired:true,quotaRequired:true},
+  {id:'code',state:feature(env,'CODE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,sandboxRequired:true,identityRequired:true,quotaRequired:true},
+  {id:'agents',state:feature(env,'AGENT_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,approvalGated:true,identityRequired:true,quotaRequired:true},
+  {id:'automation',state:feature(env,'AUTOMATION_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,approvalGated:true,identityRequired:true},
   {id:'webapp',state:'FRONTEND_READY',contract:true},
   {id:'image',state:feature(env,'IMAGE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'ENGINE_REQUIRED',contract:true},
   {id:'video',state:feature(env,'VIDEO_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'ENGINE_REQUIRED',contract:true},
   {id:'voice',state:feature(env,'VOICE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'ENGINE_REQUIRED',contract:true},
   {id:'artifacts',state:'FRONTEND_READY',contract:true},
-  {id:'knowledge',state:feature(env,'KNOWLEDGE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':(persistence==='AVAILABLE'?'RUNTIME_DISABLED':'PERSISTENCE_DISABLED'),contract:true,provenanceRequired:true},
+  {id:'knowledge',state:feature(env,'KNOWLEDGE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':(persistence==='AVAILABLE'?'RUNTIME_DISABLED':'PERSISTENCE_DISABLED'),contract:true,provenanceRequired:true,identityRequired:true},
   {id:'developer',state:'CONTRACT_READY',contract:true}
 ];}
 
@@ -52,23 +63,29 @@ async function readJson(request){
   return request.json();
 }
 
-function identityContext(request,env){
-  if(!feature(env,'IDENTITY_RUNTIME_ENABLED'))return {ok:false,code:'IDENTITY_RUNTIME_DISABLED'};
-  // Temporary contract only. Production must replace these headers with verified Access/OIDC JWT claims.
-  const tenantId=(request.headers.get('x-sakthiai-tenant')||'').trim();
-  const userId=(request.headers.get('x-sakthiai-user')||'').trim();
-  if(!tenantId||!userId)return {ok:false,code:'IDENTITY_REQUIRED'};
-  return {ok:true,tenantId,userId};
+async function securityContext(request,env,permission,capability){
+  const identity=await authenticateRequest(request,env);
+  if(!identity.ok)return {ok:false,code:identity.code};
+  const tenantId=tenantSelector(request);
+  if(!tenantId)return {ok:false,code:'TENANT_REQUIRED'};
+  const access=await authorizeTenant(env,identity,tenantId,permission);
+  if(!access.ok)return access;
+  const quota=await enforceQuota(env,{tenantId:access.tenantId,userId:access.userId,capability});
+  if(!quota.ok)return quota;
+  return {ok:true,identity,access,quota};
 }
 
 async function handleChat(request,env,id){
   if(!bool(env.AI_RUNTIME_ENABLED))return json({ok:false,code:'RUNTIME_DISABLED',message:'SakthiAI AI runtime is disabled by owner cost policy.',requestId:id},503);
   if(!env.AI)return json({ok:false,code:'AI_BINDING_MISSING',message:'Workers AI binding is not configured.',requestId:id},503);
+  const security=await securityContext(request,env,'ai_use','chat');
+  if(!security.ok)return json({ok:false,code:security.code,message:'Verified identity, tenant access and quota controls are required before SakthiAI AI execution.',requestId:id},securityStatus(security.code),security.retryAfter?{'retry-after':String(security.retryAfter)}:{});
   let body;try{body=await readJson(request);}catch(error){const code=error.message;return json({ok:false,code,requestId:id},code==='PAYLOAD_TOO_LARGE'?413:400);}
   const prompt=String(body?.prompt||'').trim();
   if(!prompt)return json({ok:false,code:'PROMPT_REQUIRED',requestId:id},400);
   if(prompt.length>12000)return json({ok:false,code:'PROMPT_TOO_LARGE',requestId:id},413);
   const model=env.AI_MODEL||'@cf/meta/llama-3.1-8b-instruct-fp8-fast';
+  const started=Date.now();
   try{
     const result=await env.AI.run(model,{messages:[
       {role:'system',content:'You are SakthiAI. Be accurate, concise, transparent about uncertainty, never claim external actions you did not perform, and never request or expose secrets.'},
@@ -76,8 +93,10 @@ async function handleChat(request,env,id){
     ],max_tokens:700,temperature:0.3});
     const answer=result?.response||result?.result?.response||result?.text||'';
     if(!answer)return json({ok:false,code:'EMPTY_MODEL_RESPONSE',requestId:id,model},502);
+    await recordUsage(env,{tenantId:security.access.tenantId,userId:security.access.userId,requestId:id,capability:'chat',provider:'cloudflare-workers-ai',model,costClass:'free',inputUnits:prompt.length,outputUnits:String(answer).length,latencyMs:Date.now()-started});
     return json({ok:true,answer,provider:'cloudflare-workers-ai',model,costPolicy:'free-first-fail-closed',requestId:id});
   }catch(error){
+    await recordUsage(env,{tenantId:security.access.tenantId,userId:security.access.userId,requestId:id,capability:'chat',provider:'cloudflare-workers-ai',model,costClass:'free',inputUnits:prompt.length,outputUnits:0,latencyMs:Date.now()-started}).catch(()=>{});
     return json({ok:false,code:'AI_RUNTIME_ERROR',message:'The configured free-first runtime failed. No paid fallback was attempted.',requestId:id},502);
   }
 }
@@ -92,19 +111,24 @@ async function contractResponse(request,env,id,kind){
 async function persistenceResponse(request,env,id,operation){
   const state=persistenceState(env);
   if(state.state!=='AVAILABLE')return json({ok:false,code:state.state,message:state.reason,requestId:id},503);
-  const identity=identityContext(request,env);
-  if(!identity.ok)return json({ok:false,code:identity.code,message:'Verified SakthiAI identity is required before durable tenant data can be accessed.',requestId:id},401);
+  const permission=operation.endsWith('list')?(operation.startsWith('projects')?'projects_read':'tasks_read'):(operation.startsWith('projects')?'projects_write':'tasks_write');
+  const capability=operation.startsWith('projects')?'projects':'tasks';
+  const security=await securityContext(request,env,permission,capability);
+  if(!security.ok)return json({ok:false,code:security.code,message:'Verified identity, active tenant membership, RBAC permission and quota controls are required.',requestId:id},securityStatus(security.code),security.retryAfter?{'retry-after':String(security.retryAfter)}:{});
   try{
-    if(operation==='projects-list')return json({ok:true,projects:await listProjects(env,identity.tenantId),requestId:id});
+    let payload;
+    if(operation==='projects-list')payload={ok:true,projects:await listProjects(env,security.access.tenantId),requestId:id};
     if(operation==='projects-create'){
       const body=await readJson(request);
-      return json({ok:true,project:await createProject(env,{...body,tenantId:identity.tenantId,userId:identity.userId}),requestId:id},201);
+      payload={ok:true,project:await createProject(env,{...body,tenantId:security.access.tenantId,userId:security.access.userId}),requestId:id};
     }
-    if(operation==='tasks-list')return json({ok:true,tasks:await listTasks(env,identity.tenantId),requestId:id});
+    if(operation==='tasks-list')payload={ok:true,tasks:await listTasks(env,security.access.tenantId),requestId:id};
     if(operation==='tasks-create'){
       const body=await readJson(request);
-      return json({ok:true,task:await createPlannedTask(env,{...body,tenantId:identity.tenantId,userId:identity.userId}),execution:'NOT_STARTED',requestId:id},201);
+      payload={ok:true,task:await createPlannedTask(env,{...body,tenantId:security.access.tenantId,userId:security.access.userId}),execution:'NOT_STARTED',requestId:id};
     }
+    await recordUsage(env,{tenantId:security.access.tenantId,userId:security.access.userId,requestId:id,capability,costClass:'free'});
+    return json(payload,operation.endsWith('create')?201:200);
   }catch(error){
     const code=error.message||'PERSISTENCE_ERROR';
     const status=code.includes('INVALID')?400:(code==='PAYLOAD_TOO_LARGE'?413:500);
@@ -116,11 +140,12 @@ export default {
   async fetch(request,env){
     const url=new URL(request.url);const id=requestId();
     if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{'allow':'GET, POST, OPTIONS','cache-control':'no-store'}});
-    if(request.method==='GET'&&(url.pathname==='/api/health'||url.pathname==='/health'))return json({ok:true,status:'ok',product:'SakthiAI',runtime:bool(env.AI_RUNTIME_ENABLED)?'enabled':'disabled',persistence:persistenceState(env).state,requestId:id});
-    if(request.method==='GET'&&url.pathname==='/api/v1/status')return json({ok:true,status:'ok',release:'flagship-hi-tech-v2-foundation',policy:policy(env),requestId:id});
+    if(request.method==='GET'&&(url.pathname==='/api/health'||url.pathname==='/health'))return json({ok:true,status:'ok',product:'SakthiAI',runtime:bool(env.AI_RUNTIME_ENABLED)?'enabled':'disabled',persistence:persistenceState(env).state,identity:identityState(env).state,quota:quotaPolicy(env).enabled?'enabled':'disabled',requestId:id});
+    if(request.method==='GET'&&url.pathname==='/api/v1/status')return json({ok:true,status:'ok',release:'flagship-hi-tech-v3-security-foundation',policy:policy(env),requestId:id});
     if(request.method==='GET'&&url.pathname==='/api/v1/policy')return json({ok:true,policy:policy(env),requestId:id});
     if(request.method==='GET'&&url.pathname==='/api/v1/capabilities')return json({ok:true,capabilities:capabilityRegistry(env),requestId:id});
-    if(request.method==='GET'&&url.pathname==='/api/v1/persistence/status')return json({ok:true,persistence:persistenceState(env),identity:feature(env,'IDENTITY_RUNTIME_ENABLED')?'enabled':'disabled',requestId:id});
+    if(request.method==='GET'&&url.pathname==='/api/v1/security/status')return json({ok:true,identity:identityState(env),quota:quotaPolicy(env),persistence:persistenceState(env),requestId:id});
+    if(request.method==='GET'&&url.pathname==='/api/v1/persistence/status')return json({ok:true,persistence:persistenceState(env),identity:identityState(env),quota:quotaPolicy(env),requestId:id});
     if(request.method==='POST'&&url.pathname==='/api/v1/chat')return handleChat(request,env,id);
     if(request.method==='POST'&&url.pathname==='/api/v1/research/plan')return contractResponse(request,env,id,'research');
     if(request.method==='POST'&&url.pathname==='/api/v1/code/plan')return contractResponse(request,env,id,'code');
