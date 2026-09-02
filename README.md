@@ -13,21 +13,22 @@ SakthiAI is the clean next-generation flagship AI platform. This repository does
 - API responses are excluded from PWA caching.
 - Mobile, tablet, desktop, keyboard and reduced-motion behavior are first-class release gates.
 
-## Current branch phase — Hi-Tech V2 foundation
+## Current branch phase — Hi-Tech V3 security foundation
 
-`flagship/hi-tech-v1` now contains the V1 flagship workspace plus the V2 durable-intelligence foundation:
+`flagship/hi-tech-v1` now contains the V1 flagship workspace, V2 durable-intelligence contracts and V3 verified-security foundation:
 
 - 12 interactive flagship capability surfaces
 - capability truth registry + machine-readable execution contracts
 - responsive workspace shell + installable PWA
 - clean `sakthiai-flagship-api` Worker scaffold
-- free-first chat contract with no paid fallback
-- D1 migration prepared but **no D1 binding provisioned**
+- Cloudflare Access RS256 JWT verification using controlled JWKS lookup
+- issuer, audience, expiry and cryptographic signature validation
+- server-side internal user + tenant membership + RBAC authorization
+- fail-closed request-window and daily-AI quota contracts backed by the future D1 usage ledger
+- D1 migration prepared and execution-tested, but **no D1 binding provisioned**
 - tenant/user/RBAC/project/conversation/task/approval/provenance/artifact/usage/audit schema
-- fail-closed persistence adapter
-- identity gate in front of all durable tenant data
 - research, code, agent and knowledge execution contracts
-- all execution/runtime gates default OFF
+- all execution/runtime/security gates default OFF
 - R2 and AI Search bindings absent
 - no SaravanAI data/runtime dependency
 
@@ -46,16 +47,43 @@ SakthiAI is the clean next-generation flagship AI platform. This repository does
 11. Knowledge & RAG
 12. Developer Platform
 
+## Verified identity and tenant authorization
+
+`src/auth.js` verifies Cloudflare Access JWTs instead of trusting raw identity headers. Runtime configuration must provide the Access team domain and audience outside source control. The verifier pins RS256, restricts JWKS lookup to `*.cloudflareaccess.com`, verifies signature, issuer, audience and expiry, and rejects malformed or expired tokens.
+
+`src/rbac.js` then resolves the verified external subject against SakthiAI's own `users`, `memberships` and `tenants` records. The tenant header is only a selector; it does not grant access. Durable or AI operations require an active user, active tenant, active membership and an allowed role.
+
+Bearer-style Access JWT acceptance is disabled by default. The normal protected-web contract uses `Cf-Access-Jwt-Assertion`.
+
 ## Durable foundation
 
 `migrations/0001_foundation.sql` defines the future D1 data model. It is source-only in this phase; it does not create or connect a Cloudflare database.
 
-Durable APIs also fail closed unless both conditions are deliberately satisfied:
+`scripts/test_d1_migration.py` executes that migration against in-memory SQLite in CI and validates required tables, schema version, foreign keys, indexes, tenant-scoped project visibility, positive membership lookup and negative cross-tenant membership isolation.
+
+Durable APIs remain unavailable unless all required gates are deliberately satisfied:
 
 1. `PERSISTENCE_ENABLED=true` and a D1 `DB` binding exists.
-2. the verified identity runtime is enabled.
+2. verified identity runtime is configured and enabled.
+3. the verified subject has an active SakthiAI tenant membership with sufficient RBAC permission.
+4. quota runtime is enabled and the request remains within policy.
 
-The current header-shaped identity fields are a contract placeholder only. Production authorization must use verified Cloudflare Access/OIDC JWT claims with tenant membership/RBAC enforcement before durable APIs are activated.
+## Quota and cost boundary
+
+`src/quota.js` defines a D1-backed fail-closed quota foundation with a request window and daily AI allowance. Defaults are policy values only; quota execution itself is disabled in preview.
+
+- paid AI providers: OFF
+- silent paid fallback: OFF
+- paid overage: OFF
+- AI runtime: OFF
+- identity runtime: OFF
+- persistence runtime: OFF
+- quota runtime: OFF
+- D1: schema/test ready, binding not provisioned
+- R2: OFF; no binding
+- AI Search: OFF; no binding
+
+A future AI request is allowed only after AI runtime + verified identity + tenant RBAC + D1 persistence/usage ledger + quota controls are all deliberately enabled. One flag cannot bypass the other gates.
 
 ## Execution contracts
 
@@ -68,22 +96,22 @@ The current header-shaped identity fields are a contract placeholder only. Produ
 
 These contracts do not claim execution. Their runtime gates default disabled and return explicit `*_RUNTIME_DISABLED` states.
 
-## Cost policy
-
-Machine-readable policy: `config/runtime-policy.json`.
-
-- paid AI providers: OFF
-- silent paid fallback: OFF
-- D1: schema prepared, activation not provisioned
-- R2: OFF; no binding
-- AI Search: OFF; no binding
-- Workers AI chat: binding contract exists, but `AI_RUNTIME_ENABLED=false`
-- all V2 runtime gates: OFF by default
-
 ## API contracts
 
 - `openapi/sakthiai-v1.yaml` — initial flagship runtime contract
 - `openapi/sakthiai-v2.yaml` — durable projects/tasks + research/code/agent/knowledge contracts
+- `openapi/sakthiai-v3.yaml` — verified Access JWT, tenant-RBAC and quota-protected runtime contract
+
+## Validation
+
+The flagship CI now runs:
+
+1. structural and safety validation
+2. machine-readable V3 policy validation
+3. a real RSA-signed Cloudflare Access JWT verification test
+4. a real SQLite execution test of the D1 migration and tenant-isolation model
+
+A green CI run proves those repository-level contracts only. It does **not** mean production identity, D1, DNS or AI runtime has been activated.
 
 ## Runtime isolation
 
@@ -93,4 +121,4 @@ The frontend remains useful as a product shell when offline or unconfigured, but
 
 ## Release rule
 
-Do not merge to `main`, provision durable cloud bindings, enable execution gates or repoint `sakthiai.omsaravanabhava.org` until exact-head CI, responsive/browser QA, verified identity, tenant isolation, cost controls and runtime/domain separation gates are green.
+Do not merge to `main`, provision durable cloud bindings, enable execution gates or repoint `sakthiai.omsaravanabhava.org` until exact-head CI, responsive/browser QA, protected-main governance, controlled identity configuration, tenant isolation, cost controls and runtime/domain separation gates are green.
