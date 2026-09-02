@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "product": "SakthiAI",
+  "truthStates": [
+    "RUNTIME_AVAILABLE",
+    "RUNTIME_DISABLED",
+    "CONTRACT_READY",
+    "PERSISTENCE_DISABLED",
+    "ENGINE_REQUIRED",
+    "FRONTEND_READY"
+  ],
+  "capabilities": [
+    {"id":"chat","runtimeGate":"AI_RUNTIME_ENABLED","defaultState":"RUNTIME_DISABLED","externalWrite":false,"paidProviderAllowed":false},
+    {"id":"research","runtimeGate":"RESEARCH_RUNTIME_ENABLED","defaultState":"RUNTIME_DISABLED","externalWrite":false,"paidProviderAllowed":false,"evidenceRequired":true},
+    {"id":"code","runtimeGate":"CODE_RUNTIME_ENABLED","defaultState":"RUNTIME_DISABLED","externalWrite":false,"paidProviderAllowed":false,"sandboxRequiredForExecution":true},
+    {"id":"agents","runtimeGate":"AGENT_RUNTIME_ENABLED","defaultState":"RUNTIME_DISABLED","externalWrite":false,"paidProviderAllowed":false,"approvalRequiredForConsequentialActions":true},
+    {"id":"automation","runtimeGate":"AUTOMATION_RUNTIME_ENABLED","defaultState":"RUNTIME_DISABLED","externalWrite":false,"paidProviderAllowed":false,"approvalRequiredForConsequentialActions":true},
+    {"id":"webapp","runtimeGate":"CODE_RUNTIME_ENABLED","defaultState":"FRONTEND_READY","externalWrite":false,"paidProviderAllowed":false},
+    {"id":"image","runtimeGate":"IMAGE_RUNTIME_ENABLED","defaultState":"ENGINE_REQUIRED","externalWrite":false,"paidProviderAllowed":false},
+    {"id":"video","runtimeGate":"VIDEO_RUNTIME_ENABLED","defaultState":"ENGINE_REQUIRED","externalWrite":false,"paidProviderAllowed":false},
+    {"id":"voice","runtimeGate":"VOICE_RUNTIME_ENABLED","defaultState":"ENGINE_REQUIRED","externalWrite":false,"paidProviderAllowed":false},
+    {"id":"artifacts","runtimeGate":"ARTIFACT_RUNTIME_ENABLED","defaultState":"FRONTEND_READY","externalWrite":false,"paidProviderAllowed":false},
+    {"id":"knowledge","runtimeGate":"KNOWLEDGE_RUNTIME_ENABLED","defaultState":"PERSISTENCE_DISABLED","externalWrite":false,"paidProviderAllowed":false,"provenanceRequired":true},
+    {"id":"developer","runtimeGate":"DEVELOPER_RUNTIME_ENABLED","defaultState":"CONTRACT_READY","externalWrite":false,"paidProviderAllowed":false}
+  ]
+}
