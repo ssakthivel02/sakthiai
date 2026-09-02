@@ -1,15 +1,16 @@
 {
   "name": "sakthiai-flagship",
-  "version": "0.4.0-hi-tech-v4-agent-control-foundation",
+  "version": "0.5.0-hi-tech-v5-control-center-contracts",
   "private": true,
   "type": "module",
-  "description": "Clean SakthiAI Intelligence OS with verified identity, tenant RBAC, fail-closed quotas and dormant durable agent-control contracts.",
+  "description": "Clean SakthiAI Intelligence OS with verified identity, durable agent control, premium control-center UI and provider-neutral executor safety contracts.",
   "scripts": {
     "validate": "node scripts/validate.mjs",
     "test:auth": "node scripts/test-auth.mjs",
     "test:agent": "node scripts/test-agent-state.mjs",
+    "test:executor": "node scripts/test-executor-contracts.mjs",
     "test:migration": "python3 scripts/test_d1_migration.py",
-    "test": "npm run validate && npm run test:auth && npm run test:agent && npm run test:migration"
+    "test": "npm run validate && npm run test:auth && npm run test:agent && npm run test:executor && npm run test:migration"
   },
   "engines": {
     "node": ">=20"
