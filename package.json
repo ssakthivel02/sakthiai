@@ -1,0 +1,14 @@
+{
+  "name": "sakthiai-flagship",
+  "version": "0.1.0-hi-tech-v1",
+  "private": true,
+  "type": "module",
+  "description": "Clean SakthiAI flagship Intelligence OS frontend and fail-closed API foundation.",
+  "scripts": {
+    "test": "node scripts/validate.mjs",
+    "validate": "node scripts/validate.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
