@@ -3,6 +3,8 @@ import {researchContract,codeContract,agentContract,knowledgeContract} from './e
 import {authenticateRequest,identityState} from './auth.js';
 import {authorizeTenant} from './rbac.js';
 import {quotaPolicy,enforceQuota,recordUsage} from './quota.js';
+import {agentControlState} from './agent-control.js';
+import {handleAgentApi} from './agent-api.js';
 
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer"};
 
@@ -23,6 +25,7 @@ function policy(env){return {
   persistence:persistenceState(env).state,
   identity:identityState(env).state,
   quota:quotaPolicy(env),
+  agentControl:agentControlState(env),
   paidProvidersEnabled:false,
   silentPaidFallback:false,
   legacyRuntimeImport:false,
@@ -33,6 +36,8 @@ function policy(env){return {
     research:feature(env,'RESEARCH_RUNTIME_ENABLED'),
     code:feature(env,'CODE_RUNTIME_ENABLED'),
     agents:feature(env,'AGENT_RUNTIME_ENABLED'),
+    agentControl:feature(env,'AGENT_CONTROL_ENABLED'),
+    agentExternalActions:feature(env,'AGENT_EXTERNAL_ACTIONS_ENABLED'),
     automation:feature(env,'AUTOMATION_RUNTIME_ENABLED'),
     knowledge:feature(env,'KNOWLEDGE_RUNTIME_ENABLED'),
     image:feature(env,'IMAGE_RUNTIME_ENABLED'),
@@ -40,20 +45,25 @@ function policy(env){return {
     voice:feature(env,'VOICE_RUNTIME_ENABLED')
   }
 };}
-function capabilityRegistry(env){const runtime=bool(env.AI_RUNTIME_ENABLED)&&Boolean(env.AI);const persistence=persistenceState(env).state;return [
-  {id:'chat',state:runtime?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,identityRequired:true,quotaRequired:true},
-  {id:'research',state:feature(env,'RESEARCH_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,evidenceRequired:true,identityRequired:true,quotaRequired:true},
-  {id:'code',state:feature(env,'CODE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,sandboxRequired:true,identityRequired:true,quotaRequired:true},
-  {id:'agents',state:feature(env,'AGENT_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,approvalGated:true,identityRequired:true,quotaRequired:true},
-  {id:'automation',state:feature(env,'AUTOMATION_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,approvalGated:true,identityRequired:true},
-  {id:'webapp',state:'FRONTEND_READY',contract:true},
-  {id:'image',state:feature(env,'IMAGE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'ENGINE_REQUIRED',contract:true},
-  {id:'video',state:feature(env,'VIDEO_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'ENGINE_REQUIRED',contract:true},
-  {id:'voice',state:feature(env,'VOICE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'ENGINE_REQUIRED',contract:true},
-  {id:'artifacts',state:'FRONTEND_READY',contract:true},
-  {id:'knowledge',state:feature(env,'KNOWLEDGE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':(persistence==='AVAILABLE'?'RUNTIME_DISABLED':'PERSISTENCE_DISABLED'),contract:true,provenanceRequired:true,identityRequired:true},
-  {id:'developer',state:'CONTRACT_READY',contract:true}
-];}
+function capabilityRegistry(env){
+  const runtime=bool(env.AI_RUNTIME_ENABLED)&&Boolean(env.AI);
+  const persistence=persistenceState(env).state;
+  const control=agentControlState(env);
+  return [
+    {id:'chat',state:runtime?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,identityRequired:true,quotaRequired:true},
+    {id:'research',state:feature(env,'RESEARCH_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,evidenceRequired:true,identityRequired:true,quotaRequired:true},
+    {id:'code',state:feature(env,'CODE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,sandboxRequired:true,identityRequired:true,quotaRequired:true},
+    {id:'agents',state:control.state==='AVAILABLE'?'CONTROL_PLANE_READY':'RUNTIME_DISABLED',contract:true,controlPlane:control.state,externalActions:control.externalActions,executionImplemented:false,approvalGated:true,identityRequired:true,quotaRequired:true},
+    {id:'automation',state:feature(env,'AUTOMATION_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,approvalGated:true,identityRequired:true},
+    {id:'webapp',state:'FRONTEND_READY',contract:true},
+    {id:'image',state:feature(env,'IMAGE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'ENGINE_REQUIRED',contract:true},
+    {id:'video',state:feature(env,'VIDEO_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'ENGINE_REQUIRED',contract:true},
+    {id:'voice',state:feature(env,'VOICE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'ENGINE_REQUIRED',contract:true},
+    {id:'artifacts',state:'FRONTEND_READY',contract:true},
+    {id:'knowledge',state:feature(env,'KNOWLEDGE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':(persistence==='AVAILABLE'?'RUNTIME_DISABLED':'PERSISTENCE_DISABLED'),contract:true,provenanceRequired:true,identityRequired:true},
+    {id:'developer',state:'CONTRACT_READY',contract:true}
+  ];
+}
 
 async function readJson(request){
   const type=request.headers.get('content-type')||'';
@@ -140,17 +150,19 @@ export default {
   async fetch(request,env){
     const url=new URL(request.url);const id=requestId();
     if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{'allow':'GET, POST, OPTIONS','cache-control':'no-store'}});
-    if(request.method==='GET'&&(url.pathname==='/api/health'||url.pathname==='/health'))return json({ok:true,status:'ok',product:'SakthiAI',runtime:bool(env.AI_RUNTIME_ENABLED)?'enabled':'disabled',persistence:persistenceState(env).state,identity:identityState(env).state,quota:quotaPolicy(env).enabled?'enabled':'disabled',requestId:id});
-    if(request.method==='GET'&&url.pathname==='/api/v1/status')return json({ok:true,status:'ok',release:'flagship-hi-tech-v3-security-foundation',policy:policy(env),requestId:id});
+    if(request.method==='GET'&&(url.pathname==='/api/health'||url.pathname==='/health'))return json({ok:true,status:'ok',product:'SakthiAI',runtime:bool(env.AI_RUNTIME_ENABLED)?'enabled':'disabled',persistence:persistenceState(env).state,identity:identityState(env).state,quota:quotaPolicy(env).enabled?'enabled':'disabled',agentControl:agentControlState(env),requestId:id});
+    if(request.method==='GET'&&url.pathname==='/api/v1/status')return json({ok:true,status:'ok',release:'flagship-hi-tech-v4-agent-control-foundation',policy:policy(env),requestId:id});
     if(request.method==='GET'&&url.pathname==='/api/v1/policy')return json({ok:true,policy:policy(env),requestId:id});
     if(request.method==='GET'&&url.pathname==='/api/v1/capabilities')return json({ok:true,capabilities:capabilityRegistry(env),requestId:id});
-    if(request.method==='GET'&&url.pathname==='/api/v1/security/status')return json({ok:true,identity:identityState(env),quota:quotaPolicy(env),persistence:persistenceState(env),requestId:id});
+    if(request.method==='GET'&&url.pathname==='/api/v1/security/status')return json({ok:true,identity:identityState(env),quota:quotaPolicy(env),persistence:persistenceState(env),agentControl:agentControlState(env),requestId:id});
     if(request.method==='GET'&&url.pathname==='/api/v1/persistence/status')return json({ok:true,persistence:persistenceState(env),identity:identityState(env),quota:quotaPolicy(env),requestId:id});
     if(request.method==='POST'&&url.pathname==='/api/v1/chat')return handleChat(request,env,id);
     if(request.method==='POST'&&url.pathname==='/api/v1/research/plan')return contractResponse(request,env,id,'research');
     if(request.method==='POST'&&url.pathname==='/api/v1/code/plan')return contractResponse(request,env,id,'code');
     if(request.method==='POST'&&url.pathname==='/api/v1/agents/plan')return contractResponse(request,env,id,'agents');
     if(request.method==='POST'&&url.pathname==='/api/v1/knowledge/query')return contractResponse(request,env,id,'knowledge');
+    const agentResponse=await handleAgentApi(request,env,url,id);
+    if(agentResponse)return agentResponse;
     if(request.method==='GET'&&url.pathname==='/api/v1/projects')return persistenceResponse(request,env,id,'projects-list');
     if(request.method==='POST'&&url.pathname==='/api/v1/projects')return persistenceResponse(request,env,id,'projects-create');
     if(request.method==='GET'&&url.pathname==='/api/v1/tasks')return persistenceResponse(request,env,id,'tasks-list');
