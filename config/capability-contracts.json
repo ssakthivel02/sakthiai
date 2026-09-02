@@ -1,9 +1,10 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "2.0",
   "product": "SakthiAI",
   "truthStates": [
     "RUNTIME_AVAILABLE",
     "RUNTIME_DISABLED",
+    "CONTROL_PLANE_READY",
     "CONTRACT_READY",
     "PERSISTENCE_DISABLED",
     "ENGINE_REQUIRED",
@@ -13,7 +14,7 @@
     {"id":"chat","runtimeGate":"AI_RUNTIME_ENABLED","defaultState":"RUNTIME_DISABLED","externalWrite":false,"paidProviderAllowed":false},
     {"id":"research","runtimeGate":"RESEARCH_RUNTIME_ENABLED","defaultState":"RUNTIME_DISABLED","externalWrite":false,"paidProviderAllowed":false,"evidenceRequired":true},
     {"id":"code","runtimeGate":"CODE_RUNTIME_ENABLED","defaultState":"RUNTIME_DISABLED","externalWrite":false,"paidProviderAllowed":false,"sandboxRequiredForExecution":true},
-    {"id":"agents","runtimeGate":"AGENT_RUNTIME_ENABLED","defaultState":"RUNTIME_DISABLED","externalWrite":false,"paidProviderAllowed":false,"approvalRequiredForConsequentialActions":true},
+    {"id":"agents","runtimeGate":"AGENT_RUNTIME_ENABLED","controlGate":"AGENT_CONTROL_ENABLED","externalActionGate":"AGENT_EXTERNAL_ACTIONS_ENABLED","defaultState":"RUNTIME_DISABLED","controlReadyState":"CONTROL_PLANE_READY","executionImplemented":false,"externalWrite":false,"paidProviderAllowed":false,"checkpointingRequired":true,"verifierRequired":true,"approvalRequiredForConsequentialActions":true},
     {"id":"automation","runtimeGate":"AUTOMATION_RUNTIME_ENABLED","defaultState":"RUNTIME_DISABLED","externalWrite":false,"paidProviderAllowed":false,"approvalRequiredForConsequentialActions":true},
     {"id":"webapp","runtimeGate":"CODE_RUNTIME_ENABLED","defaultState":"FRONTEND_READY","externalWrite":false,"paidProviderAllowed":false},
     {"id":"image","runtimeGate":"IMAGE_RUNTIME_ENABLED","defaultState":"ENGINE_REQUIRED","externalWrite":false,"paidProviderAllowed":false},
