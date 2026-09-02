@@ -196,9 +196,7 @@ The flagship CI validates:
 6. executor envelope safety rules including idempotency, approval, verifier, rollback and binding gates
 7. SQLite execution of D1 migrations 0001 + 0002 + 0003 with tenant/isolation/idempotency/receipt/rollback tests
 
-Exact-head validation evidence is maintained in PR #5 and release-gate Issue #6 so documentation updates do not recursively move the branch head merely to record the head itself.
-
-A green CI run proves repository-level contracts only. It does **not** activate production identity, D1, DNS, AI runtime, executor bindings or external agent execution.
+Exact-head validation evidence is maintained in PR #5 and release-gate Issue #6. A green CI run proves repository-level contracts only; it does **not** activate production identity, D1, DNS, AI runtime, executor bindings or external agent execution.
 
 ## Runtime isolation
 
