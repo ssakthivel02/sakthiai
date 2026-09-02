@@ -1,1 +1,13 @@
-{"name":"SakthiAI","short_name":"SakthiAI","start_url":"./","display":"standalone","background_color":"#07111d","theme_color":"#07111d","description":"Next-generation AI workspace flagship."}
+{
+  "name": "SakthiAI — Intelligence OS",
+  "short_name": "SakthiAI",
+  "description": "Next-generation AI operating workspace for reasoning, research, engineering, agents, automation, media, documents and knowledge.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#050816",
+  "theme_color": "#050816",
+  "categories": ["productivity", "utilities", "developer"]
+}
