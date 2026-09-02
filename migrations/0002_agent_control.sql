@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS evidence_records (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
   FOREIGN KEY (tenant_id,task_id) REFERENCES tasks(tenant_id,id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id,verifier_run_id) REFERENCES verifier_runs(tenant_id,id) ON DELETE SET NULL
+  FOREIGN KEY (tenant_id,verifier_run_id) REFERENCES verifier_runs(tenant_id,id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_execution_policy_tenant ON task_execution_policy(tenant_id,task_id);
