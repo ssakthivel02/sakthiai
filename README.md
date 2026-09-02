@@ -13,22 +13,26 @@ SakthiAI is the clean next-generation flagship AI platform. This repository does
 - API responses are excluded from PWA caching.
 - Mobile, tablet, desktop, keyboard and reduced-motion behavior are first-class release gates.
 
-## Current branch phase — Hi-Tech V3 security foundation
+## Current branch phase — Hi-Tech V4 agent-control foundation
 
-`flagship/hi-tech-v1` now contains the V1 flagship workspace, V2 durable-intelligence contracts and V3 verified-security foundation:
+`flagship/hi-tech-v1` contains the V1 flagship workspace, V2 durable-intelligence contracts, V3 verified-security foundation and V4 durable agent-control plane:
 
 - 12 interactive flagship capability surfaces
-- capability truth registry + machine-readable execution contracts
-- responsive workspace shell + installable PWA
-- clean `sakthiai-flagship-api` Worker scaffold
-- Cloudflare Access RS256 JWT verification using controlled JWKS lookup
-- issuer, audience, expiry and cryptographic signature validation
-- server-side internal user + tenant membership + RBAC authorization
-- fail-closed request-window and daily-AI quota contracts backed by the future D1 usage ledger
-- D1 migration prepared and execution-tested, but **no D1 binding provisioned**
-- tenant/user/RBAC/project/conversation/task/approval/provenance/artifact/usage/audit schema
-- research, code, agent and knowledge execution contracts
-- all execution/runtime/security gates default OFF
+- verified Cloudflare Access RS256 JWT contract
+- server-side tenant membership + RBAC authorization
+- fail-closed request-window and daily-AI quota foundation
+- D1 schema and migrations tested locally in CI, but **no D1 binding provisioned**
+- durable agent state machine with bounded retries
+- GREEN / AMBER / RED action-risk classification
+- tenant-scoped task execution policy
+- checkpoint/resume records
+- internal worker leases to prevent duplicate task workers
+- owner/admin approval queue and decision audit trail
+- trusted verifier run + evidence schema
+- completion requires a passed verifier record
+- public verifier mutation disabled
+- autonomous external execution not implemented
+- all runtime/security/control gates default OFF
 - R2 and AI Search bindings absent
 - no SaravanAI data/runtime dependency
 
@@ -55,18 +59,59 @@ SakthiAI is the clean next-generation flagship AI platform. This repository does
 
 Bearer-style Access JWT acceptance is disabled by default. The normal protected-web contract uses `Cf-Access-Jwt-Assertion`.
 
-## Durable foundation
+## Durable D1 foundation
 
-`migrations/0001_foundation.sql` defines the future D1 data model. It is source-only in this phase; it does not create or connect a Cloudflare database.
+`migrations/0001_foundation.sql` defines tenants, users, memberships, projects, conversations, messages, tasks, task events, approvals, knowledge provenance, artifacts, usage and audit records.
 
-`scripts/test_d1_migration.py` executes that migration against in-memory SQLite in CI and validates required tables, schema version, foreign keys, indexes, tenant-scoped project visibility, positive membership lookup and negative cross-tenant membership isolation.
+`migrations/0002_agent_control.sql` extends the model with:
 
-Durable APIs remain unavailable unless all required gates are deliberately satisfied:
+- `task_execution_policy`
+- `task_checkpoints`
+- `worker_leases`
+- `verifier_runs`
+- `evidence_records`
 
-1. `PERSISTENCE_ENABLED=true` and a D1 `DB` binding exists.
-2. verified identity runtime is configured and enabled.
-3. the verified subject has an active SakthiAI tenant membership with sufficient RBAC permission.
-4. quota runtime is enabled and the request remains within policy.
+V4 agent rows use composite `(tenant_id, task_id)` foreign keys so a record cannot pair one tenant with another tenant's task merely because both IDs exist.
+
+`scripts/test_d1_migration.py` executes both migrations against in-memory SQLite and verifies schema version, required tables/indexes, foreign keys, tenant visibility, membership isolation, cross-tenant agent-row rejection, verifier-evidence isolation and single-worker task lease enforcement.
+
+The source does not create a Cloudflare database. Durable APIs remain unavailable until D1 provisioning is explicitly approved and all required identity/quota gates are enabled.
+
+## Agent control plane
+
+`src/agent-state.js` is the pure transition/risk model. Tasks use:
+
+`planned → queued → running → completed/failed`, with durable `waiting_approval`, `paused` and `cancelled` paths.
+
+Safety rules include:
+
+- terminal completed/cancelled tasks cannot resume
+- failed tasks cannot exceed bounded retry limits
+- AMBER/RED work cannot start without approval
+- repository/external/publish/message/deploy/destructive actions cannot run while external actions are disabled
+- a task cannot become `completed` without the latest verifier state being `passed`
+
+Action-risk defaults:
+
+- GREEN: read-only or internal reversible work
+- AMBER: repository writes, external writes, publishing and messaging
+- RED: deployment and destructive actions
+
+`src/agent-control.js` persists task state, execution policy, approvals, checkpoints, events, audit records and trusted verifier evidence.
+
+`src/agent-leases.js` provides internal lease acquire/heartbeat/release plus latest-checkpoint recovery. Lease tokens are not exposed by the public V4 API.
+
+`src/agent-api.js` exposes guarded task/control operations only. Approval decisions require owner/admin RBAC. Verifier history is readable, but verifier mutation is intentionally not public; `recordVerifier()` additionally fails closed unless `AGENT_VERIFIER_RUNTIME_ENABLED=true` in a future trusted internal verifier runtime.
+
+### Three independent agent gates
+
+All default to `false`:
+
+1. `AGENT_CONTROL_ENABLED` — durable orchestration/control records.
+2. `AGENT_EXTERNAL_ACTIONS_ENABLED` — consequential repository/external/deploy/destructive actions.
+3. `AGENT_VERIFIER_RUNTIME_ENABLED` — trusted internal verifier mutation.
+
+Enabling the control plane therefore does **not** enable external actions or self-verification.
 
 ## Quota and cost boundary
 
@@ -79,54 +124,42 @@ Durable APIs remain unavailable unless all required gates are deliberately satis
 - identity runtime: OFF
 - persistence runtime: OFF
 - quota runtime: OFF
+- agent control: OFF
+- agent external actions: OFF
+- trusted verifier runtime: OFF
 - D1: schema/test ready, binding not provisioned
 - R2: OFF; no binding
 - AI Search: OFF; no binding
 
-A future AI request is allowed only after AI runtime + verified identity + tenant RBAC + D1 persistence/usage ledger + quota controls are all deliberately enabled. One flag cannot bypass the other gates.
-
-## Execution contracts
-
-`src/execution-contracts.js` defines bounded contracts for:
-
-- evidence-first research
-- sandbox-required code engineering
-- durable agents with GREEN/AMBER/RED autonomy classes
-- provenance-required knowledge/RAG
-
-These contracts do not claim execution. Their runtime gates default disabled and return explicit `*_RUNTIME_DISABLED` states.
+A future AI or durable-control request cannot bypass the independent identity, tenant-RBAC, persistence and quota gates.
 
 ## API contracts
 
 - `openapi/sakthiai-v1.yaml` — initial flagship runtime contract
 - `openapi/sakthiai-v2.yaml` — durable projects/tasks + research/code/agent/knowledge contracts
 - `openapi/sakthiai-v3.yaml` — verified Access JWT, tenant-RBAC and quota-protected runtime contract
+- `openapi/sakthiai-v4.yaml` — durable agent task/checkpoint/approval/event/verifier-history control contract
+
+The V4 public API has no agent `/execute` endpoint and no verifier-write endpoint.
 
 ## Validation
 
-The flagship CI runs:
+The flagship CI now runs:
 
 1. structural and safety validation
-2. machine-readable V3 policy validation
-3. a real RSA-signed Cloudflare Access JWT verification test
-4. a real SQLite execution test of the D1 migration and tenant-isolation model
+2. JavaScript syntax validation
+3. machine-readable V4 policy validation
+4. real RSA-signed Cloudflare Access JWT verification test
+5. agent state-machine/risk/approval/verifier/retry tests
+6. real SQLite execution of D1 migrations 0001 + 0002 with tenant-isolation tests
 
-Latest exact-head evidence before this documentation-only record:
-
-- commit `3f32c402e47baec677507646359e81e5c73cae95`
-- GitHub Actions `Validate SakthiAI flagship` run #43: **SUCCESS**
-- structural/safety: PASS
-- V3 policy validator: PASS
-- Access JWT cryptographic test: PASS
-- D1 migration + tenant-isolation test: PASS
-
-A green CI run proves those repository-level contracts only. It does **not** mean production identity, D1, DNS or AI runtime has been activated.
+A green CI run proves repository-level contracts only. It does **not** mean production identity, D1, DNS, AI runtime or external agent execution has been activated.
 
 ## Runtime isolation
 
 `assets/runtime.js` probes only a configured SakthiAI API base or same-origin API when running on the approved SakthiAI custom domain. It does not point at the SaravanAI production runtime.
 
-The frontend remains useful as a product shell when offline or unconfigured, but it will not fake an AI response.
+The frontend remains useful as a product shell when offline or unconfigured, but it will not fake an AI response. The agent capability uses `CONTROL_PLANE_READY` when durable orchestration is available; it does not claim `RUNTIME_AVAILABLE` merely because the control plane is healthy.
 
 ## Release rule
 
