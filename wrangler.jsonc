@@ -10,6 +10,18 @@
     "AI_RUNTIME_ENABLED": "false",
     "PAID_PROVIDERS_ENABLED": "false",
     "LEGACY_RUNTIME_IMPORT": "false",
+    "PERSISTENCE_ENABLED": "false",
+    "IDENTITY_RUNTIME_ENABLED": "false",
+    "RESEARCH_RUNTIME_ENABLED": "false",
+    "CODE_RUNTIME_ENABLED": "false",
+    "AGENT_RUNTIME_ENABLED": "false",
+    "AUTOMATION_RUNTIME_ENABLED": "false",
+    "KNOWLEDGE_RUNTIME_ENABLED": "false",
+    "IMAGE_RUNTIME_ENABLED": "false",
+    "VIDEO_RUNTIME_ENABLED": "false",
+    "VOICE_RUNTIME_ENABLED": "false",
+    "ARTIFACT_RUNTIME_ENABLED": "false",
+    "DEVELOPER_RUNTIME_ENABLED": "false",
     "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fp8-fast"
   },
   "ai": {
