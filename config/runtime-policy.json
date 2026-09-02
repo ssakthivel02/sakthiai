@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "3.0",
+  "schemaVersion": "4.0",
   "product": "SakthiAI",
   "policyMode": "FREE_FIRST_FAIL_CLOSED",
   "legacyRuntimeImport": false,
@@ -16,6 +16,8 @@
     "research": false,
     "code": false,
     "agents": false,
+    "agentControl": false,
+    "agentExternalActions": false,
     "automation": false,
     "knowledge": false,
     "image": false,
@@ -23,6 +25,21 @@
     "voice": false,
     "artifacts": false,
     "developer": false
+  },
+  "agentControl": {
+    "durableStateMachinePrepared": true,
+    "checkpointingPrepared": true,
+    "workerLeasesPrepared": true,
+    "approvalQueuePrepared": true,
+    "verifierEvidencePrepared": true,
+    "boundedRetriesRequired": true,
+    "completionRequiresVerifierPass": true,
+    "externalActionsEnabled": false,
+    "riskModel": {
+      "green": "READ_ONLY_OR_INTERNAL_REVERSIBLE",
+      "amber": "APPROVAL_REQUIRED_FOR_REPOSITORY_OR_EXTERNAL_WRITE",
+      "red": "OWNER_APPROVAL_AND_SEPARATE_EXTERNAL_ACTION_GATE_REQUIRED"
+    }
   },
   "externalWrites": {
     "default": "APPROVAL_REQUIRED",
