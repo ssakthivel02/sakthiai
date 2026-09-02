@@ -2,7 +2,7 @@ import {authenticateRequest} from './auth.js';
 import {authorizeTenant} from './rbac.js';
 import {enforceQuota,recordUsage} from './quota.js';
 import {taskStateContract} from './agent-state.js';
-import {agentControlState,createAgentTask,getAgentTask,transitionAgentTask,createCheckpoint,requestApproval,decideApproval,recordVerifier} from './agent-control.js';
+import {agentControlState,createAgentTask,getAgentTask,transitionAgentTask,createCheckpoint,requestApproval,decideApproval} from './agent-control.js';
 import {getLatestCheckpoint} from './agent-leases.js';
 import {listApprovalQueue,listTaskEvents,listVerifierRuns} from './agent-queries.js';
 
@@ -21,8 +21,8 @@ function statusFor(code){
   if(['RBAC_FORBIDDEN','TENANT_MEMBERSHIP_REQUIRED','TENANT_ACCESS_INACTIVE'].includes(code))return 403;
   if(String(code||'').startsWith('ACCESS_JWT_')||code==='IDENTITY_REQUIRED')return 401;
   if(['TASK_NOT_FOUND','APPROVAL_NOT_FOUND','LEASE_NOT_FOUND'].includes(code))return 404;
-  if(['CONTENT_TYPE_REQUIRED','PAYLOAD_TOO_LARGE','TASK_INPUT_INVALID','AUTONOMY_CLASS_INVALID','ACTION_CLASS_INVALID','APPROVAL_SUMMARY_INVALID','APPROVAL_DECISION_INVALID','VERIFIER_STATE_INVALID','TARGET_STATE_INVALID','TASK_STATE_INVALID'].includes(code))return code==='PAYLOAD_TOO_LARGE'?413:400;
-  if(['APPROVAL_REQUIRED','APPROVAL_ALREADY_DECIDED','TASK_TRANSITION_FORBIDDEN','TASK_RETRY_LIMIT_REACHED','TASK_STATE_CONFLICT','TASK_LEASE_HELD'].includes(code))return 409;
+  if(['TENANT_REQUIRED','CONTENT_TYPE_REQUIRED','PAYLOAD_TOO_LARGE','TASK_INPUT_INVALID','AUTONOMY_CLASS_INVALID','ACTION_CLASS_INVALID','APPROVAL_SUMMARY_INVALID','APPROVAL_DECISION_INVALID','TARGET_STATE_INVALID','TASK_STATE_INVALID'].includes(code))return code==='PAYLOAD_TOO_LARGE'?413:400;
+  if(['APPROVAL_REQUIRED','APPROVAL_ALREADY_PENDING','APPROVAL_ALREADY_DECIDED','TASK_TRANSITION_FORBIDDEN','TASK_RETRY_LIMIT_REACHED','TASK_STATE_CONFLICT','TASK_LEASE_HELD'].includes(code))return 409;
   return 503;
 }
 async function security(request,env,permission){
@@ -44,7 +44,8 @@ async function secured(request,env,id,permission,operation){
   try{
     const result=await operation(sec.access,sec.identity);
     await recordUsage(env,{tenantId:sec.access.tenantId,userId:sec.access.userId,requestId:id,capability:'agents-control',costClass:'free'});
-    return json({ok:true,...result,requestId:id},result?._status||200);
+    const {_status=200,...payload}=result||{};
+    return json({ok:true,...payload,requestId:id},_status);
   }catch(error){
     const code=error?.message||'AGENT_CONTROL_ERROR';
     return json({ok:false,code,requestId:id},statusFor(code));
@@ -53,7 +54,7 @@ async function secured(request,env,id,permission,operation){
 
 export async function handleAgentApi(request,env,url,id){
   const path=url.pathname;
-  if(request.method==='GET'&&path==='/api/v1/agents/control/status')return json({ok:true,control:agentControlState(env),externalExecutionImplemented:false,requestId:id});
+  if(request.method==='GET'&&path==='/api/v1/agents/control/status')return json({ok:true,control:agentControlState(env),externalExecutionImplemented:false,publicVerifierWrites:false,requestId:id});
   if(request.method==='GET'&&path==='/api/v1/agents/state-contract')return json({ok:true,contract:taskStateContract(),requestId:id});
 
   if(request.method==='POST'&&path==='/api/v1/agents/tasks')return secured(request,env,id,'agents_write',async access=>{
@@ -79,7 +80,7 @@ export async function handleAgentApi(request,env,url,id){
   const checkpointMatch=path.match(/^\/api\/v1\/agents\/tasks\/([^/]+)\/checkpoints$/);
   if(request.method==='POST'&&checkpointMatch)return secured(request,env,id,'agents_write',async access=>{
     const body=await readJson(request);
-    return {checkpoint:await createCheckpoint(env,{tenantId:access.tenantId,userId:access.userId,taskId:checkpointMatch[1],state:body?.state,checkpoint:body?.checkpoint}) ,_status:201};
+    return {checkpoint:await createCheckpoint(env,{tenantId:access.tenantId,userId:access.userId,taskId:checkpointMatch[1],state:body?.state,checkpoint:body?.checkpoint}),_status:201};
   });
 
   const approvalRequestMatch=path.match(/^\/api\/v1\/agents\/tasks\/([^/]+)\/approvals$/);
@@ -94,12 +95,6 @@ export async function handleAgentApi(request,env,url,id){
   if(request.method==='POST'&&approvalDecisionMatch)return secured(request,env,id,'agents_approve',async access=>{
     const body=await readJson(request);
     return {decision:await decideApproval(env,{tenantId:access.tenantId,userId:access.userId,approvalId:approvalDecisionMatch[1],decision:body?.decision,note:body?.note})};
-  });
-
-  const verifierMatch=path.match(/^\/api\/v1\/agents\/tasks\/([^/]+)\/verifiers$/);
-  if(request.method==='POST'&&verifierMatch)return secured(request,env,id,'agents_verify',async access=>{
-    const body=await readJson(request);
-    return {verifier:await recordVerifier(env,{tenantId:access.tenantId,userId:access.userId,taskId:verifierMatch[1],verifierType:body?.verifierType,state:body?.state,summary:body?.summary,evidence:body?.evidence}),_status:201};
   });
 
   const eventsMatch=path.match(/^\/api\/v1\/agents\/tasks\/([^/]+)\/events$/);
