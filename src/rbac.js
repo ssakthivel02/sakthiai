@@ -1,4 +1,5 @@
 const PERMISSIONS=Object.freeze({
+  ai_use:['owner','admin','member'],
   projects_read:['owner','admin','member','viewer','auditor'],
   projects_write:['owner','admin','member'],
   tasks_read:['owner','admin','member','viewer','auditor'],
