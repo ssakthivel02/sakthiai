@@ -3,6 +3,8 @@ PRAGMA foreign_keys = ON;
 INSERT OR REPLACE INTO schema_meta(key,value,updated_at)
 VALUES ('schema_version','2',CURRENT_TIMESTAMP);
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_tasks_tenant_id ON tasks(tenant_id,id);
+
 CREATE TABLE IF NOT EXISTS task_execution_policy (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
@@ -13,7 +15,7 @@ CREATE TABLE IF NOT EXISTS task_execution_policy (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
-  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  FOREIGN KEY (tenant_id,task_id) REFERENCES tasks(tenant_id,id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS task_checkpoints (
@@ -28,7 +30,7 @@ CREATE TABLE IF NOT EXISTS task_checkpoints (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(task_id,sequence_no),
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
-  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  FOREIGN KEY (tenant_id,task_id) REFERENCES tasks(tenant_id,id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS worker_leases (
@@ -40,7 +42,7 @@ CREATE TABLE IF NOT EXISTS worker_leases (
   expires_at TEXT NOT NULL,
   heartbeat_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
-  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  FOREIGN KEY (tenant_id,task_id) REFERENCES tasks(tenant_id,id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS verifier_runs (
@@ -54,8 +56,9 @@ CREATE TABLE IF NOT EXISTS verifier_runs (
   started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   completed_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(tenant_id,id),
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
-  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  FOREIGN KEY (tenant_id,task_id) REFERENCES tasks(tenant_id,id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS evidence_records (
@@ -70,8 +73,8 @@ CREATE TABLE IF NOT EXISTS evidence_records (
   evidence_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
-  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-  FOREIGN KEY (verifier_run_id) REFERENCES verifier_runs(id) ON DELETE SET NULL
+  FOREIGN KEY (tenant_id,task_id) REFERENCES tasks(tenant_id,id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id,verifier_run_id) REFERENCES verifier_runs(tenant_id,id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_execution_policy_tenant ON task_execution_policy(tenant_id,task_id);
