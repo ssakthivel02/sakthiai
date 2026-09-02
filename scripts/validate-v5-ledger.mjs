@@ -35,6 +35,8 @@ must(executorSource.includes('EXECUTOR_IDEMPOTENCY_REQUIRED'),'idempotency enfor
 must(executorSource.includes('EXECUTOR_APPROVAL_REQUIRED'),'approval enforcement missing');
 must(executorSource.includes('EXECUTOR_VERIFIER_REQUIRED'),'verifier enforcement missing');
 must(executorSource.includes('EXECUTOR_ROLLBACK_PLAN_REQUIRED'),'rollback enforcement missing');
+must(executorSource.includes('EXECUTOR_BINDING_GATE_DISABLED'),'non-dry-run binding gate enforcement missing');
+must(executorSource.includes('EXECUTOR_NOT_BOUND'),'non-dry-run concrete binding enforcement missing');
 must(executorSource.includes("executed:false,sideEffects:false,executorBound:false"),'dry-run truth receipt missing');
 must(!executorSource.includes('fetch('),'executor contracts must not call external services');
 
@@ -66,4 +68,4 @@ must(openapi.includes('NO_EXECUTOR_BOUND'),'V5 OpenAPI binding truth missing');
 must(!openapi.includes('/api/v1/agents/execute'),'V5 OpenAPI must not expose execution endpoint');
 
 console.log('SAKTHIAI_V5_EXECUTOR_LEDGER_VALIDATION_PASS');
-console.log(JSON.stringify({executorContracts:6,boundExecutors:0,externalExecutionImplemented:false,bindingGateDefault:false,idempotencyUnique:true,rollbackLedger:true,controlCenterReadOnly:true,pwaControlCenterCached:true},null,2));
+console.log(JSON.stringify({executorContracts:6,boundExecutors:0,externalExecutionImplemented:false,bindingGateDefault:false,idempotencyUnique:true,rollbackLedger:true,nonDryRunRequiresBinding:true,controlCenterReadOnly:true,pwaControlCenterCached:true},null,2));
