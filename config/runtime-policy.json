@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "product": "SakthiAI",
   "policyMode": "FREE_FIRST_FAIL_CLOSED",
   "legacyRuntimeImport": false,
@@ -12,6 +12,7 @@
     "ai": false,
     "identity": false,
     "persistence": false,
+    "quota": false,
     "research": false,
     "code": false,
     "agents": false,
@@ -33,15 +34,32 @@
     "forcePush": false
   },
   "identity": {
-    "productionRequirement": "VERIFIED_ACCESS_OR_OIDC_JWT",
-    "headerOnlyIdentity": "CONTRACT_ONLY_NOT_PRODUCTION_AUTH",
+    "implementation": "CLOUDFLARE_ACCESS_RS256_JWT_VERIFICATION_READY_NOT_CONFIGURED",
+    "productionRequirement": "VERIFIED_ACCESS_OR_REVIEWED_OIDC_JWT",
+    "rawIdentityHeadersAccepted": false,
+    "issuerValidationRequired": true,
+    "audienceValidationRequired": true,
+    "expiryValidationRequired": true,
+    "signatureValidationRequired": true,
     "tenantIsolationRequired": true,
-    "rbacRequired": true
+    "serverSideMembershipLookupRequired": true,
+    "rbacRequired": true,
+    "bearerAccessJwtDefault": false
+  },
+  "quota": {
+    "implementation": "D1_USAGE_LEDGER_FOUNDATION",
+    "enabled": false,
+    "paidOverage": false,
+    "behavior": "FAIL_CLOSED",
+    "defaultWindowSeconds": 60,
+    "defaultRequestsPerWindow": 30,
+    "defaultDailyAiRequests": 100
   },
   "cloudResources": {
     "d1": {
       "activation": "NOT_PROVISIONED",
       "schemaPrepared": true,
+      "migrationExecutionTestPrepared": true,
       "bindingPresentInWrangler": false,
       "costPosture": "FREE_PLAN_FIRST",
       "overagePolicy": "FAIL_CLOSED_AT_FREE_LIMITS"
