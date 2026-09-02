@@ -1,0 +1,92 @@
+openapi: 3.1.0
+info:
+  title: SakthiAI Flagship API V3 Security Foundation
+  version: 0.3.0
+  description: Verified identity, tenant RBAC and fail-closed quota contracts. Runtime gates remain disabled by default.
+servers:
+  - url: https://api-sakthiai.example.invalid
+    description: Placeholder only; production hostname requires separate approval.
+components:
+  securitySchemes:
+    CloudflareAccessJwt:
+      type: apiKey
+      in: header
+      name: Cf-Access-Jwt-Assertion
+      description: RS256 JWT verified against the configured Cloudflare Access team JWKS, issuer, audience and expiry.
+  parameters:
+    Tenant:
+      name: X-SakthiAI-Tenant
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 128 }
+      description: Tenant selector only. Authorization is determined by server-side membership and RBAC lookup.
+  schemas:
+    Error:
+      type: object
+      required: [ok, code, requestId]
+      properties:
+        ok: { type: boolean, const: false }
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }
+paths:
+  /api/v1/security/status:
+    get:
+      operationId: securityStatus
+      responses:
+        '200':
+          description: Non-secret identity, quota and persistence readiness state.
+  /api/v1/projects:
+    get:
+      operationId: listProjectsV3
+      security: [{ CloudflareAccessJwt: [] }]
+      parameters: [{ $ref: '#/components/parameters/Tenant' }]
+      responses:
+        '200': { description: Tenant-scoped projects after verified identity and RBAC }
+        '401': { description: JWT missing or invalid }
+        '403': { description: Membership or role denied }
+        '429': { description: Quota exceeded }
+        '503': { description: Identity, quota or D1 runtime not activated }
+    post:
+      operationId: createProjectV3
+      security: [{ CloudflareAccessJwt: [] }]
+      parameters: [{ $ref: '#/components/parameters/Tenant' }]
+      responses:
+        '201': { description: Project created after verified identity, member-or-higher RBAC and quota check }
+        '401': { description: JWT missing or invalid }
+        '403': { description: Membership or role denied }
+        '429': { description: Quota exceeded }
+        '503': { description: Identity, quota or D1 runtime not activated }
+  /api/v1/tasks:
+    get:
+      operationId: listTasksV3
+      security: [{ CloudflareAccessJwt: [] }]
+      parameters: [{ $ref: '#/components/parameters/Tenant' }]
+      responses:
+        '200': { description: Tenant-scoped tasks after verified identity and RBAC }
+        '401': { description: JWT missing or invalid }
+        '403': { description: Membership or role denied }
+        '429': { description: Quota exceeded }
+        '503': { description: Identity, quota or D1 runtime not activated }
+    post:
+      operationId: createTaskV3
+      security: [{ CloudflareAccessJwt: [] }]
+      parameters: [{ $ref: '#/components/parameters/Tenant' }]
+      responses:
+        '201': { description: Planned task created. Execution remains separately gated. }
+        '401': { description: JWT missing or invalid }
+        '403': { description: Membership or role denied }
+        '429': { description: Quota exceeded }
+        '503': { description: Identity, quota or D1 runtime not activated }
+  /api/v1/chat:
+    post:
+      operationId: chatV3
+      description: Free-first AI execution. Requires AI runtime, verified Access JWT, active tenant membership, ai_use role permission, quota runtime and D1 usage ledger. No paid fallback.
+      security: [{ CloudflareAccessJwt: [] }]
+      parameters: [{ $ref: '#/components/parameters/Tenant' }]
+      responses:
+        '200': { description: Approved free-first runtime answer }
+        '401': { description: JWT missing or invalid }
+        '403': { description: Tenant membership or role denied }
+        '429': { description: Rate or daily AI quota exceeded }
+        '503': { description: One or more required runtime gates are disabled or unavailable }
