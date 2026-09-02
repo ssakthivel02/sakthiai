@@ -196,10 +196,10 @@ The flagship CI validates:
 6. executor envelope safety rules including idempotency, approval, verifier, rollback and binding gates
 7. SQLite execution of D1 migrations 0001 + 0002 + 0003 with tenant/isolation/idempotency/receipt/rollback tests
 
-Substantive V5 code head before this documentation commit:
+Final V5 validation record before this documentation-only evidence update:
 
-- commit `0c12d40462acb36fd9a31d2004aa81c0cfb94c9b`
-- GitHub Actions `Validate SakthiAI flagship` run #99: **SUCCESS**
+- commit `6733a12b6bb78615f17f9e9bf81e50f638d8e4c1`
+- GitHub Actions `Validate SakthiAI flagship` run #100: **SUCCESS**
 
 A green CI run proves repository-level contracts only. It does **not** activate production identity, D1, DNS, AI runtime, executor bindings or external agent execution.
 
