@@ -3,9 +3,10 @@ info:
   title: SakthiAI Agent Control Plane API
   version: 0.4.0-foundation
   description: >-
-    Durable SakthiAI agent-control contract. This contract manages task state, checkpoints,
-    approvals, verifier evidence and audit history. It does not implement autonomous external
-    execution. Paid providers, external actions and production deployment remain disabled by default.
+    Durable SakthiAI agent-control contract. This public contract manages task state, checkpoints,
+    approval requests/decisions and read-only verifier/event history. Trusted verifier writes and
+    worker leases are internal-only. Autonomous external execution is not implemented. Paid providers,
+    external actions and production deployment remain disabled by default.
 servers:
   - url: https://api-sakthiai.example.invalid
     description: Placeholder only; controlled runtime hostname must be approved separately.
@@ -17,7 +18,7 @@ paths:
       security: []
       operationId: agentControlStatus
       responses:
-        '200': { description: Fail-closed control-plane status }
+        '200': { description: Fail-closed control-plane status including external-action and verifier gates }
   /api/v1/agents/state-contract:
     get:
       security: []
@@ -106,6 +107,7 @@ paths:
                 summary: { type: string, minLength: 1, maxLength: 4000 }
       responses:
         '201': { description: Pending approval created and task placed in waiting_approval }
+        '409': { description: Terminal/inconsistent task state or existing pending approval }
   /api/v1/agents/approvals:
     get:
       operationId: listAgentApprovalQueue
@@ -144,23 +146,12 @@ paths:
   /api/v1/agents/tasks/{taskId}/verifiers:
     get:
       operationId: listVerifierRuns
+      description: Read-only verifier history. Verifier mutations require a future trusted internal verifier runtime and are not exposed by this public contract.
       parameters:
         - { $ref: '#/components/parameters/Tenant' }
         - { $ref: '#/components/parameters/TaskId' }
       responses:
         '200': { description: Tenant-scoped verifier history }
-    post:
-      operationId: recordVerifierRun
-      parameters:
-        - { $ref: '#/components/parameters/Tenant' }
-        - { $ref: '#/components/parameters/TaskId' }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/VerifierInput' }
-      responses:
-        '201': { description: Verifier result and bounded evidence records stored }
   /api/v1/agents/tasks/{taskId}/events:
     get:
       operationId: listAgentTaskEvents
@@ -209,23 +200,3 @@ components:
         taskType: { type: string, maxLength: 80, default: agent }
         autonomyClass: { $ref: '#/components/schemas/AutonomyClass' }
         actionClass: { $ref: '#/components/schemas/ActionClass' }
-    VerifierInput:
-      type: object
-      additionalProperties: false
-      required: [state]
-      properties:
-        verifierType: { type: string, maxLength: 80, default: policy }
-        state: { type: string, enum: [pending, running, passed, failed, inconclusive] }
-        summary: { type: string, maxLength: 4000 }
-        evidence:
-          type: array
-          maxItems: 50
-          items:
-            type: object
-            additionalProperties: true
-            properties:
-              type: { type: string, maxLength: 80 }
-              sourceRef: { type: string, maxLength: 2000 }
-              checksum: { type: string, maxLength: 128 }
-              claim: { type: string, maxLength: 4000 }
-              data: { type: object }
