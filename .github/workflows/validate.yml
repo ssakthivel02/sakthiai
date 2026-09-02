@@ -13,6 +13,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Structural and safety validation
         shell: bash
         run: |
@@ -23,11 +26,17 @@ jobs:
           test -f assets/capabilities.js
           test -f assets/runtime.js
           test -f config/runtime-policy.json
+          test -f src/worker.js
+          test -f src/auth.js
+          test -f src/rbac.js
+          test -f src/quota.js
+          test -f migrations/0001_foundation.sql
+          test -f openapi/sakthiai-v3.yaml
+          test -f scripts/test-auth.mjs
+          test -f scripts/test_d1_migration.py
           test -f manifest.webmanifest
           test -f sw.js
           test -f offline.html
-          test -f src/worker.js
-          test -f openapi/sakthiai-v1.yaml
           grep -q 'SakthiAI' index.html
           grep -q 'prefers-reduced-motion' assets/styles.css
           grep -q 'serviceWorker' assets/app.js
@@ -39,5 +48,9 @@ jobs:
           ! grep -Rni 'Access-Control-Allow-Origin: \*' . --exclude-dir=.git
           ! grep -Rni 'saravanai.omsaravanabhava.org' assets config index.html src --exclude-dir=.git
           ! grep -RniE '(sk-|AIza|xox[baprs]-|ghp_|github_pat_)' assets config index.html src --exclude-dir=.git
-      - name: Flagship policy validator
+      - name: Flagship V3 policy validator
         run: node scripts/validate.mjs
+      - name: Cloudflare Access JWT cryptographic test
+        run: node scripts/test-auth.mjs
+      - name: D1 migration and tenant-isolation test
+        run: python3 scripts/test_d1_migration.py
