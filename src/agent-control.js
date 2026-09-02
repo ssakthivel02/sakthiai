@@ -23,7 +23,8 @@ function normalizeActionClass(value){
 
 export function agentControlState(env){return {
   state:enabled(env,'AGENT_CONTROL_ENABLED')?(persistenceState(env).state==='AVAILABLE'?'AVAILABLE':persistenceState(env).state):'AGENT_CONTROL_DISABLED',
-  externalActions:enabled(env,'AGENT_EXTERNAL_ACTIONS_ENABLED')?'enabled':'disabled'
+  externalActions:enabled(env,'AGENT_EXTERNAL_ACTIONS_ENABLED')?'enabled':'disabled',
+  verifierRuntime:enabled(env,'AGENT_VERIFIER_RUNTIME_ENABLED')?'enabled':'disabled'
 };}
 
 export async function createAgentTask(env,{tenantId,userId,projectId=null,title,objective,taskType='agent',autonomyClass='green',actionClass='read_only'}){
@@ -84,6 +85,7 @@ export async function createCheckpoint(env,{tenantId,userId,taskId,state,checkpo
   const db=dbFor(env);
   const task=await getAgentTask(env,tenantId,taskId);
   if(!task)throw new Error('TASK_NOT_FOUND');
+  if(['completed','cancelled'].includes(task.state))throw new Error('TASK_TRANSITION_FORBIDDEN');
   const row=await db.prepare(`SELECT COALESCE(MAX(sequence_no),-1) AS seq FROM task_checkpoints WHERE tenant_id=? AND task_id=?`).bind(tenantId,taskId).first();
   const sequenceNo=Number(row?.seq??-1)+1;
   const id=`chk_${crypto.randomUUID()}`;
@@ -99,13 +101,16 @@ export async function requestApproval(env,{tenantId,userId,taskId,actionClass,su
   const db=dbFor(env);
   const task=await getAgentTask(env,tenantId,taskId);
   if(!task)throw new Error('TASK_NOT_FOUND');
+  if(['completed','cancelled','waiting_approval'].includes(task.state))throw new Error('TASK_STATE_CONFLICT');
+  const pending=await db.prepare(`SELECT id FROM approvals WHERE tenant_id=? AND task_id=? AND state='pending' LIMIT 1`).bind(tenantId,taskId).first();
+  if(pending)throw new Error('APPROVAL_ALREADY_PENDING');
   const safeSummary=text(summary,4000);if(!safeSummary)throw new Error('APPROVAL_SUMMARY_INVALID');
   const safeAction=normalizeActionClass(actionClass||task.action_class);
   const approvalId=`apr_${crypto.randomUUID()}`;
   const eventId=`evt_${crypto.randomUUID()}`;
   await db.batch([
     db.prepare(`INSERT INTO approvals(id,tenant_id,task_id,requested_by,action_class,action_summary,state) VALUES(?,?,?,?,?,?,'pending')`).bind(approvalId,tenantId,taskId,userId,safeAction,safeSummary),
-    db.prepare(`UPDATE tasks SET state='waiting_approval',approval_required=1,updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=? AND state IN ('planned','queued','running','paused')`).bind(tenantId,taskId),
+    db.prepare(`UPDATE tasks SET state='waiting_approval',approval_required=1,updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=? AND state=?`).bind(tenantId,taskId,task.state),
     db.prepare(`INSERT INTO task_events(id,tenant_id,task_id,event_type,actor_type,actor_id,payload_json) VALUES(?,?,?,'approval_requested','user',?,?)`).bind(eventId,tenantId,taskId,userId,jsonText({approvalId,actionClass:safeAction}))
   ]);
   return {id:approvalId,taskId,state:'pending',actionClass:safeAction};
@@ -114,9 +119,10 @@ export async function requestApproval(env,{tenantId,userId,taskId,actionClass,su
 export async function decideApproval(env,{tenantId,userId,approvalId,decision,note=null}){
   const db=dbFor(env);
   if(!['approved','rejected'].includes(decision))throw new Error('APPROVAL_DECISION_INVALID');
-  const approval=await db.prepare(`SELECT id,task_id,state FROM approvals WHERE tenant_id=? AND id=? LIMIT 1`).bind(tenantId,approvalId).first();
+  const approval=await db.prepare(`SELECT a.id,a.task_id,a.state,t.state AS task_state FROM approvals a JOIN tasks t ON t.id=a.task_id AND t.tenant_id=a.tenant_id WHERE a.tenant_id=? AND a.id=? LIMIT 1`).bind(tenantId,approvalId).first();
   if(!approval)throw new Error('APPROVAL_NOT_FOUND');
   if(approval.state!=='pending')throw new Error('APPROVAL_ALREADY_DECIDED');
+  if(approval.task_state!=='waiting_approval')throw new Error('TASK_STATE_CONFLICT');
   const nextState=nextStateAfterApproval(decision);
   const eventId=`evt_${crypto.randomUUID()}`;
   const auditId=`aud_${crypto.randomUUID()}`;
@@ -129,16 +135,17 @@ export async function decideApproval(env,{tenantId,userId,approvalId,decision,no
   return {approvalId,taskId:approval.task_id,decision,nextState};
 }
 
-export async function recordVerifier(env,{tenantId,userId,taskId,verifierType='policy',state,summary=null,evidence=[]}){
+export async function recordVerifier(env,{tenantId,verifierId:actorId,taskId,verifierType='policy',state,summary=null,evidence=[]}){
   const db=dbFor(env);
+  if(!enabled(env,'AGENT_VERIFIER_RUNTIME_ENABLED'))throw new Error('VERIFIER_RUNTIME_DISABLED');
   if(!['pending','running','passed','failed','inconclusive'].includes(state))throw new Error('VERIFIER_STATE_INVALID');
   const task=await getAgentTask(env,tenantId,taskId);if(!task)throw new Error('TASK_NOT_FOUND');
-  const verifierId=`ver_${crypto.randomUUID()}`;
-  const statements=[db.prepare(`INSERT INTO verifier_runs(id,tenant_id,task_id,verifier_type,state,summary,evidence_count,completed_at) VALUES(?,?,?,?,?,?,?,CASE WHEN ? IN ('passed','failed','inconclusive') THEN CURRENT_TIMESTAMP ELSE NULL END)`).bind(verifierId,tenantId,taskId,text(verifierType,80)||'policy',state,summary?String(summary).slice(0,4000):null,Array.isArray(evidence)?evidence.length:0,state)];
+  const runId=`ver_${crypto.randomUUID()}`;
+  const statements=[db.prepare(`INSERT INTO verifier_runs(id,tenant_id,task_id,verifier_type,state,summary,evidence_count,completed_at) VALUES(?,?,?,?,?,?,?,CASE WHEN ? IN ('passed','failed','inconclusive') THEN CURRENT_TIMESTAMP ELSE NULL END)`).bind(runId,tenantId,taskId,text(verifierType,80)||'policy',state,summary?String(summary).slice(0,4000):null,Array.isArray(evidence)?evidence.length:0,state)];
   for(const item of Array.isArray(evidence)?evidence.slice(0,50):[]){
-    statements.push(db.prepare(`INSERT INTO evidence_records(id,tenant_id,task_id,verifier_run_id,evidence_type,source_ref,checksum_sha256,claim,evidence_json) VALUES(?,?,?,?,?,?,?,?,?)`).bind(`evd_${crypto.randomUUID()}`,tenantId,taskId,verifierId,text(item.type,80)||'unspecified',item.sourceRef?String(item.sourceRef).slice(0,2000):null,item.checksum?String(item.checksum).slice(0,128):null,item.claim?String(item.claim).slice(0,4000):null,jsonText(item.data||{})));
+    statements.push(db.prepare(`INSERT INTO evidence_records(id,tenant_id,task_id,verifier_run_id,evidence_type,source_ref,checksum_sha256,claim,evidence_json) VALUES(?,?,?,?,?,?,?,?,?)`).bind(`evd_${crypto.randomUUID()}`,tenantId,taskId,runId,text(item.type,80)||'unspecified',item.sourceRef?String(item.sourceRef).slice(0,2000):null,item.checksum?String(item.checksum).slice(0,128):null,item.claim?String(item.claim).slice(0,4000):null,jsonText(item.data||{})));
   }
-  statements.push(db.prepare(`INSERT INTO task_events(id,tenant_id,task_id,event_type,actor_type,actor_id,payload_json) VALUES(?,?,?,'verifier_recorded','verifier',?,?)`).bind(`evt_${crypto.randomUUID()}`,tenantId,taskId,userId,jsonText({verifierId,state,evidenceCount:Array.isArray(evidence)?evidence.length:0})));
+  statements.push(db.prepare(`INSERT INTO task_events(id,tenant_id,task_id,event_type,actor_type,actor_id,payload_json) VALUES(?,?,?,'verifier_recorded','verifier',?,?)`).bind(`evt_${crypto.randomUUID()}`,tenantId,taskId,actorId||null,jsonText({verifierId:runId,state,evidenceCount:Array.isArray(evidence)?evidence.length:0})));
   await db.batch(statements);
-  return {id:verifierId,taskId,state,evidenceCount:Array.isArray(evidence)?evidence.length:0};
+  return {id:runId,taskId,state,evidenceCount:Array.isArray(evidence)?evidence.length:0};
 }
