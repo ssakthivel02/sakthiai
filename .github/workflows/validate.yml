@@ -26,13 +26,21 @@ jobs:
           test -f assets/capabilities.js
           test -f assets/runtime.js
           test -f config/runtime-policy.json
+          test -f config/capability-contracts.json
           test -f src/worker.js
           test -f src/auth.js
           test -f src/rbac.js
           test -f src/quota.js
+          test -f src/agent-state.js
+          test -f src/agent-control.js
+          test -f src/agent-api.js
+          test -f src/agent-leases.js
+          test -f src/agent-queries.js
           test -f migrations/0001_foundation.sql
-          test -f openapi/sakthiai-v3.yaml
+          test -f migrations/0002_agent_control.sql
+          test -f openapi/sakthiai-v4.yaml
           test -f scripts/test-auth.mjs
+          test -f scripts/test-agent-state.mjs
           test -f scripts/test_d1_migration.py
           test -f manifest.webmanifest
           test -f sw.js
@@ -44,13 +52,23 @@ jobs:
           grep -q '"enabled": false' config/runtime-policy.json
           grep -q '"silentFallback": false' config/runtime-policy.json
           grep -q '"legacyRuntimeImport": false' config/runtime-policy.json
+          grep -q '"agentControl": false' config/runtime-policy.json
+          grep -q '"agentExternalActions": false' config/runtime-policy.json
+          grep -q '"agentVerifier": false' config/runtime-policy.json
           grep -q "url.pathname.startsWith('/api/')" sw.js
           ! grep -Rni 'Access-Control-Allow-Origin: \*' . --exclude-dir=.git
           ! grep -Rni 'saravanai.omsaravanabhava.org' assets config index.html src --exclude-dir=.git
           ! grep -RniE '(sk-|AIza|xox[baprs]-|ghp_|github_pat_)' assets config index.html src --exclude-dir=.git
-      - name: Flagship V3 policy validator
+      - name: JavaScript syntax validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          find src scripts -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | xargs -0 -n1 node --check
+      - name: Flagship V4 policy validator
         run: node scripts/validate.mjs
       - name: Cloudflare Access JWT cryptographic test
         run: node scripts/test-auth.mjs
-      - name: D1 migration and tenant-isolation test
+      - name: Agent state-machine test
+        run: node scripts/test-agent-state.mjs
+      - name: D1 V4 migration and tenant-isolation test
         run: python3 scripts/test_d1_migration.py
