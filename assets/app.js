@@ -12,7 +12,7 @@
   const symbol={chat:'AI',research:'R',code:'</>',agents:'A',automation:'⌁',webapp:'◫',image:'◈',video:'▶',voice:'≈',artifacts:'▤',knowledge:'K',developer:'{ }'};
 
   function effectiveStatus(capability){return capability?.runtimeStatus||capability?.status||'UNKNOWN';}
-  function statusClass(status){if(status==='RUNTIME_AVAILABLE'||status==='RUNTIME_CONNECTED')return'runtime';if(String(status).includes('BUILD')||String(status).includes('ENGINE')||String(status).includes('RUNTIME')||String(status).includes('PERSISTENCE'))return'building';return'';}
+  function statusClass(status){if(status==='RUNTIME_AVAILABLE'||status==='RUNTIME_CONNECTED')return'runtime';if(String(status).includes('BUILD')||String(status).includes('ENGINE')||String(status).includes('RUNTIME')||String(status).includes('PERSISTENCE')||String(status).includes('CONTROL_PLANE'))return'building';return'';}
   function pretty(status){return String(status||'UNKNOWN').replaceAll('_',' ');}
 
   function renderRegistry(){
@@ -94,5 +94,6 @@
   });
 
   const clock=$('#consoleClock');setInterval(()=>{if(clock)clock.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});},1000);
+  import('./agent-control-ui.js').catch(()=>{});
   if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 })();
