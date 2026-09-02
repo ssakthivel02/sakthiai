@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "4.0",
+  "schemaVersion": "5.0",
   "product": "SakthiAI",
   "policyMode": "FREE_FIRST_FAIL_CLOSED",
   "legacyRuntimeImport": false,
@@ -17,6 +17,7 @@
     "code": false,
     "agents": false,
     "agentControl": false,
+    "agentExecutorBindings": false,
     "agentExternalActions": false,
     "agentVerifier": false,
     "automation": false,
@@ -43,6 +44,24 @@
       "amber": "APPROVAL_REQUIRED_FOR_REPOSITORY_OR_EXTERNAL_WRITE",
       "red": "OWNER_APPROVAL_AND_SEPARATE_EXTERNAL_ACTION_GATE_REQUIRED"
     }
+  },
+  "executorContracts": {
+    "phase": "SAI_V5_CONTRACT_ONLY",
+    "bindingGateEnabled": false,
+    "externalExecutionImplemented": false,
+    "boundExecutors": 0,
+    "providerNeutral": true,
+    "idempotencyRequired": true,
+    "approvalRequiredForConsequentialActions": true,
+    "dryRunRequiredWhenSupported": true,
+    "evidenceRequired": true,
+    "verifierRequired": true,
+    "rollbackOrCompensationPlanRequired": true,
+    "secretsServerSideOnly": true,
+    "auditEventRequired": true,
+    "paidProviderAllowed": false,
+    "directMainWriteAllowed": false,
+    "forcePushAllowed": false
   },
   "externalWrites": {
     "default": "APPROVAL_REQUIRED",
@@ -100,6 +119,7 @@
     "saravanaiDataDependency": false,
     "saravanaiRuntimeDependency": false,
     "fakeSuccessStates": false,
+    "agentControlFakeMetrics": false,
     "apiCache": false,
     "browserSecretStorage": false
   }
