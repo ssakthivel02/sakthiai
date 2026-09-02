@@ -68,6 +68,11 @@ must(openapiV2.includes('/api/v1/agents/plan:'),'V2 agent contract missing');
 must(openapiV2.includes('/api/v1/knowledge/query:'),'V2 knowledge contract missing');
 
 must(runtime.includes("location.hostname==='sakthiai.omsaravanabhava.org'"),'frontend runtime domain gate missing');
+must(runtime.includes("fetchJson('/api/v1/capabilities'"),'frontend must verify per-capability runtime states');
+must(runtime.includes("capState!=='RUNTIME_AVAILABLE'"),'runtime adapter must block unavailable capabilities');
+must(app.includes("capState!=='RUNTIME_AVAILABLE'"),'composer must block unavailable capabilities');
+must(app.includes('Control plane online'),'frontend must distinguish control-plane health from capability availability');
+must(!app.includes("$('#modeStatus').textContent='RUNTIME CONNECTED'"),'frontend must not mark every mode connected from health alone');
 must(!runtime.includes('saravanai.omsaravanabhava.org'),'frontend must not call SaravanAI runtime');
 must(sw.includes("url.pathname.startsWith('/api/')"),'service worker must exclude API responses from cache');
 must(manifest.name.includes('SakthiAI'),'PWA identity incorrect');
@@ -77,4 +82,4 @@ for(const marker of ['sk-','AIza','xoxb-','xoxp-','ghp_','github_pat_'])must(!sc
 must(!scanned.includes('Access-Control-Allow-Origin: *'),'wildcard CORS must not be introduced');
 
 console.log('SAKTHIAI_FLAGSHIP_V2_VALIDATION_PASS');
-console.log(JSON.stringify({capabilities:12,paidProviders:false,silentPaidFallback:false,legacyRuntimeImport:false,apiCache:false,workerDefault:'disabled',persistenceDefault:'disabled',identityDefault:'disabled',d1Binding:false,r2Binding:false,aiSearchBinding:false},null,2));
+console.log(JSON.stringify({capabilities:12,paidProviders:false,silentPaidFallback:false,legacyRuntimeImport:false,capabilityAwareFrontend:true,apiCache:false,workerDefault:'disabled',persistenceDefault:'disabled',identityDefault:'disabled',d1Binding:false,r2Binding:false,aiSearchBinding:false},null,2));
