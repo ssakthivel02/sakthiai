@@ -4,6 +4,10 @@ const PERMISSIONS=Object.freeze({
   projects_write:['owner','admin','member'],
   tasks_read:['owner','admin','member','viewer','auditor'],
   tasks_write:['owner','admin','member'],
+  agents_read:['owner','admin','member','viewer','auditor'],
+  agents_write:['owner','admin','member'],
+  agents_verify:['owner','admin','member'],
+  agents_approve:['owner','admin'],
   approvals_decide:['owner','admin'],
   audit_read:['owner','admin','auditor']
 });
