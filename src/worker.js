@@ -27,7 +27,7 @@ function policy(env){const executors=executorContractRegistry();return {
   identity:identityState(env).state,
   quota:quotaPolicy(env),
   agentControl:agentControlState(env),
-  executorContracts:{phase:executors.phase,externalExecutionImplemented:false,boundExecutors:0,contractCount:executors.contracts.length},
+  executorContracts:{phase:executors.phase,bindingGateEnabled:feature(env,'AGENT_EXECUTOR_BINDINGS_ENABLED'),externalExecutionImplemented:false,boundExecutors:0,contractCount:executors.contracts.length},
   paidProvidersEnabled:false,
   silentPaidFallback:false,
   legacyRuntimeImport:false,
@@ -39,6 +39,7 @@ function policy(env){const executors=executorContractRegistry();return {
     code:feature(env,'CODE_RUNTIME_ENABLED'),
     agents:feature(env,'AGENT_RUNTIME_ENABLED'),
     agentControl:feature(env,'AGENT_CONTROL_ENABLED'),
+    agentExecutorBindings:feature(env,'AGENT_EXECUTOR_BINDINGS_ENABLED'),
     agentExternalActions:feature(env,'AGENT_EXTERNAL_ACTIONS_ENABLED'),
     agentVerifier:feature(env,'AGENT_VERIFIER_RUNTIME_ENABLED'),
     automation:feature(env,'AUTOMATION_RUNTIME_ENABLED'),
@@ -56,7 +57,7 @@ function capabilityRegistry(env){
     {id:'chat',state:runtime?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,identityRequired:true,quotaRequired:true},
     {id:'research',state:feature(env,'RESEARCH_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,evidenceRequired:true,identityRequired:true,quotaRequired:true},
     {id:'code',state:feature(env,'CODE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,sandboxRequired:true,identityRequired:true,quotaRequired:true},
-    {id:'agents',state:control.state==='AVAILABLE'?'CONTROL_PLANE_READY':'RUNTIME_DISABLED',contract:true,controlPlane:control.state,externalActions:control.externalActions,verifierRuntime:control.verifierRuntime,executorContracts:'CONTRACT_ONLY',executionImplemented:false,approvalGated:true,identityRequired:true,quotaRequired:true},
+    {id:'agents',state:control.state==='AVAILABLE'?'CONTROL_PLANE_READY':'RUNTIME_DISABLED',contract:true,controlPlane:control.state,externalActions:control.externalActions,verifierRuntime:control.verifierRuntime,executorBindings:feature(env,'AGENT_EXECUTOR_BINDINGS_ENABLED')?'ENABLED_NO_BINDINGS':'DISABLED',executorContracts:'CONTRACT_ONLY',executionImplemented:false,approvalGated:true,identityRequired:true,quotaRequired:true},
     {id:'automation',state:feature(env,'AUTOMATION_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'RUNTIME_DISABLED',contract:true,approvalGated:true,identityRequired:true},
     {id:'webapp',state:'FRONTEND_READY',contract:true},
     {id:'image',state:feature(env,'IMAGE_RUNTIME_ENABLED')?'RUNTIME_AVAILABLE':'ENGINE_REQUIRED',contract:true},
@@ -159,7 +160,7 @@ export default {
     if(request.method==='GET'&&url.pathname==='/api/v1/capabilities')return json({ok:true,capabilities:capabilityRegistry(env),requestId:id});
     if(request.method==='GET'&&url.pathname==='/api/v1/security/status')return json({ok:true,identity:identityState(env),quota:quotaPolicy(env),persistence:persistenceState(env),agentControl:agentControlState(env),requestId:id});
     if(request.method==='GET'&&url.pathname==='/api/v1/persistence/status')return json({ok:true,persistence:persistenceState(env),identity:identityState(env),quota:quotaPolicy(env),requestId:id});
-    if(request.method==='GET'&&url.pathname==='/api/v1/agents/executors/contracts')return json({ok:true,registry:executorContractRegistry(),requestId:id});
+    if(request.method==='GET'&&url.pathname==='/api/v1/agents/executors/contracts')return json({ok:true,bindingGateEnabled:feature(env,'AGENT_EXECUTOR_BINDINGS_ENABLED'),registry:executorContractRegistry(),requestId:id});
     if(request.method==='POST'&&url.pathname==='/api/v1/chat')return handleChat(request,env,id);
     if(request.method==='POST'&&url.pathname==='/api/v1/research/plan')return contractResponse(request,env,id,'research');
     if(request.method==='POST'&&url.pathname==='/api/v1/code/plan')return contractResponse(request,env,id,'code');
