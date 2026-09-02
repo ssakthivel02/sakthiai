@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Clean SakthiAI Intelligence OS with verified identity, durable agent control, premium control-center UI and provider-neutral executor safety contracts.",
   "scripts": {
-    "validate": "node scripts/validate.mjs",
+    "validate": "node scripts/validate.mjs && node scripts/validate-v5-ledger.mjs",
     "test:auth": "node scripts/test-auth.mjs",
     "test:agent": "node scripts/test-agent-state.mjs",
     "test:executor": "node scripts/test-executor-contracts.mjs",
