@@ -26,8 +26,8 @@ CREATE TABLE IF NOT EXISTS execution_attempts (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(tenant_id,idempotency_key),
   FOREIGN KEY (tenant_id,task_id) REFERENCES tasks(tenant_id,id) ON DELETE CASCADE,
-  FOREIGN KEY (tenant_id,approval_id) REFERENCES approvals(tenant_id,id) ON DELETE SET NULL,
-  FOREIGN KEY (tenant_id,verifier_run_id) REFERENCES verifier_runs(tenant_id,id) ON DELETE SET NULL
+  FOREIGN KEY (tenant_id,approval_id) REFERENCES approvals(tenant_id,id) ON DELETE RESTRICT,
+  FOREIGN KEY (tenant_id,verifier_run_id) REFERENCES verifier_runs(tenant_id,id) ON DELETE RESTRICT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_execution_attempts_tenant_id ON execution_attempts(tenant_id,id);
