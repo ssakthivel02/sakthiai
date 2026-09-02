@@ -51,14 +51,12 @@ if cross is not None:
 
 conn.execute("INSERT INTO task_execution_policy(id,tenant_id,task_id,action_class,external_action,destructive_action) VALUES('pol_a','ten_a','tsk_a','read_only',0,0)")
 conn.execute("INSERT INTO task_checkpoints(id,tenant_id,task_id,sequence_no,state,checkpoint_json,created_by_type,created_by) VALUES('chk_a','ten_a','tsk_a',0,'planned','{}','user','usr_a')")
+conn.execute("INSERT INTO worker_leases(task_id,tenant_id,worker_id,lease_token,expires_at) VALUES('tsk_a','ten_a','worker-a','lease-a','2099-01-01T00:00:00.000Z')")
 conn.execute("INSERT INTO verifier_runs(id,tenant_id,task_id,verifier_type,state,summary,evidence_count,completed_at) VALUES('ver_a','ten_a','tsk_a','policy','passed','ok',1,CURRENT_TIMESTAMP)")
 conn.execute("INSERT INTO evidence_records(id,tenant_id,task_id,verifier_run_id,evidence_type,source_ref,evidence_json) VALUES('evd_a','ten_a','tsk_a','ver_a','test','local:test','{}')")
+conn.commit()
 
-for sql, code in [
-    ("INSERT INTO task_execution_policy(id,tenant_id,task_id,action_class,external_action,destructive_action) VALUES('bad_pol','ten_b','tsk_a','read_only',0,0)", 'CROSS_TENANT_POLICY_ALLOWED'),
-    ("INSERT INTO task_checkpoints(id,tenant_id,task_id,sequence_no,state,checkpoint_json,created_by_type) VALUES('bad_chk','ten_b','tsk_a',1,'planned','{}','system')", 'CROSS_TENANT_CHECKPOINT_ALLOWED'),
-    ("INSERT INTO verifier_runs(id,tenant_id,task_id,verifier_type,state) VALUES('bad_ver','ten_b','tsk_a','policy','pending')", 'CROSS_TENANT_VERIFIER_ALLOWED')
-]:
+def expect_integrity(sql, code):
     try:
         conn.execute(sql)
         conn.commit()
@@ -66,12 +64,34 @@ for sql, code in [
     except sqlite3.IntegrityError:
         conn.rollback()
 
-try:
-    conn.execute("INSERT INTO projects(id,tenant_id,owner_user_id,name) VALUES('bad','ten_missing','usr_a','Bad')")
-    conn.commit()
-    raise SystemExit('FOREIGN_KEY_NOT_ENFORCED')
-except sqlite3.IntegrityError:
-    conn.rollback()
+expect_integrity(
+    "INSERT INTO task_execution_policy(id,tenant_id,task_id,action_class,external_action,destructive_action) VALUES('bad_pol','ten_b','tsk_a','read_only',0,0)",
+    'CROSS_TENANT_POLICY_ALLOWED'
+)
+expect_integrity(
+    "INSERT INTO task_checkpoints(id,tenant_id,task_id,sequence_no,state,checkpoint_json,created_by_type) VALUES('bad_chk','ten_b','tsk_a',1,'planned','{}','system')",
+    'CROSS_TENANT_CHECKPOINT_ALLOWED'
+)
+expect_integrity(
+    "INSERT INTO verifier_runs(id,tenant_id,task_id,verifier_type,state) VALUES('bad_ver','ten_b','tsk_a','policy','pending')",
+    'CROSS_TENANT_VERIFIER_ALLOWED'
+)
+expect_integrity(
+    "INSERT INTO evidence_records(id,tenant_id,task_id,verifier_run_id,evidence_type,evidence_json) VALUES('bad_evd','ten_b','tsk_b','ver_a','test','{}')",
+    'CROSS_TENANT_VERIFIER_EVIDENCE_ALLOWED'
+)
+expect_integrity(
+    "INSERT INTO worker_leases(task_id,tenant_id,worker_id,lease_token,expires_at) VALUES('tsk_a','ten_a','worker-b','lease-b','2099-01-01T00:00:00.000Z')",
+    'DUPLICATE_TASK_LEASE_ALLOWED'
+)
+expect_integrity(
+    "INSERT INTO projects(id,tenant_id,owner_user_id,name) VALUES('bad','ten_missing','usr_a','Bad')",
+    'FOREIGN_KEY_NOT_ENFORCED'
+)
+
+still_present = conn.execute("SELECT id FROM tasks WHERE tenant_id='ten_a' AND id='tsk_a'").fetchone()
+if still_present != ('tsk_a',):
+    raise SystemExit('NEGATIVE_TEST_ROLLBACK_CORRUPTED_SETUP')
 
 indexes = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
 for name in [
