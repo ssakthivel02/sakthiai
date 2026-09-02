@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "2.0",
   "product": "SakthiAI",
   "policyMode": "FREE_FIRST_FAIL_CLOSED",
   "legacyRuntimeImport": false,
@@ -8,25 +8,52 @@
     "silentFallback": false,
     "ownerApprovalRequiredToEnable": true
   },
+  "runtimeGates": {
+    "ai": false,
+    "identity": false,
+    "persistence": false,
+    "research": false,
+    "code": false,
+    "agents": false,
+    "automation": false,
+    "knowledge": false,
+    "image": false,
+    "video": false,
+    "voice": false,
+    "artifacts": false,
+    "developer": false
+  },
   "externalWrites": {
     "default": "APPROVAL_REQUIRED",
     "autonomousPublishing": false,
     "autonomousDeployment": false,
     "autonomousMessaging": false,
-    "destructiveActions": false
+    "destructiveActions": false,
+    "directMainBranchWrite": false,
+    "forcePush": false
+  },
+  "identity": {
+    "productionRequirement": "VERIFIED_ACCESS_OR_OIDC_JWT",
+    "headerOnlyIdentity": "CONTRACT_ONLY_NOT_PRODUCTION_AUTH",
+    "tenantIsolationRequired": true,
+    "rbacRequired": true
   },
   "cloudResources": {
     "d1": {
-      "activation": "ALLOWED_WHEN_NEEDED",
+      "activation": "NOT_PROVISIONED",
+      "schemaPrepared": true,
+      "bindingPresentInWrangler": false,
       "costPosture": "FREE_PLAN_FIRST",
       "overagePolicy": "FAIL_CLOSED_AT_FREE_LIMITS"
     },
     "r2": {
       "activation": "DISABLED_UNTIL_OWNER_APPROVAL",
+      "bindingPresentInWrangler": false,
       "reason": "Free allowance exists but usage beyond allowance can be billable."
     },
     "aiSearch": {
       "activation": "DISABLED_UNTIL_RUNTIME_PHASE",
+      "bindingPresentInWrangler": false,
       "costPosture": "OPEN_BETA_FREE_WITHIN_LIMITS",
       "note": "Workers AI and AI Gateway usage are governed separately."
     }
