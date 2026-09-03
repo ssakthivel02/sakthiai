@@ -8,8 +8,19 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      SAKTHIAI_EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Confirm validated revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SHA" = "$SAKTHIAI_EVIDENCE_SHA"
+          echo "Validated PR/source head: $ACTUAL_SHA"
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -109,6 +120,6 @@ jobs:
       - name: Upload preview evidence manifest
         uses: actions/upload-artifact@v4
         with:
-          name: sakthiai-v6-preview-evidence-${{ github.sha }}
+          name: sakthiai-v6-preview-evidence-${{ github.event.pull_request.head.sha || github.sha }}
           path: artifacts/preview-evidence.json
           retention-days: 14
