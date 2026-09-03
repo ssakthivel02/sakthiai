@@ -1,0 +1,121 @@
+openapi: 3.1.0
+info:
+  title: SakthiAI Preview Readiness & Observability
+  version: 0.6.0-foundation
+  description: >-
+    Public configuration-only readiness, correlation and cost-boundary metadata for a controlled preview.
+    This contract exposes no prompt content, identity, tenant usage, raw audit payload, deployment action,
+    D1 provisioning, executor binding or production activation endpoint.
+servers:
+  - url: https://api-sakthiai.example.invalid
+    description: Placeholder only; no production namespace is configured by this contract.
+paths:
+  /api/v1/readiness:
+    get:
+      security: []
+      operationId: getPreviewReadiness
+      responses:
+        '200':
+          description: Source-preview safety state. productionReady remains false in SAI-V6.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, readiness, requestId]
+                properties:
+                  ok: { type: boolean, const: true }
+                  requestId: { type: string }
+                  readiness: { $ref: '#/components/schemas/Readiness' }
+  /api/v1/observability/status:
+    get:
+      security: []
+      operationId: getObservabilityStatus
+      responses:
+        '200':
+          description: Safe public observability contract and logging state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, observability, requestId]
+                properties:
+                  ok: { type: boolean, const: true }
+                  requestId: { type: string }
+                  observability: { $ref: '#/components/schemas/Observability' }
+  /api/v1/cost/status:
+    get:
+      security: []
+      operationId: getCostBoundaryStatus
+      responses:
+        '200':
+          description: Free-first configuration and resource-binding truth without tenant usage totals.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, cost, requestId]
+                properties:
+                  ok: { type: boolean, const: true }
+                  requestId: { type: string }
+                  cost: { $ref: '#/components/schemas/CostBoundary' }
+components:
+  schemas:
+    Readiness:
+      type: object
+      required: [phase, state, previewSafeConfiguration, productionReady, deploymentPerformed, browserQaPerformed, guards]
+      properties:
+        phase: { type: string, const: SAI-V6_SOURCE_PREVIEW_READINESS }
+        state: { type: string, enum: [SOURCE_PREVIEW_SAFE, PREVIEW_GUARD_FAILED] }
+        previewSafeConfiguration: { type: boolean }
+        productionReady: { type: boolean, const: false }
+        deploymentPerformed: { type: boolean, const: false }
+        browserQaPerformed: { type: boolean, const: false }
+        guards:
+          type: object
+          additionalProperties: { type: boolean }
+        unresolvedExternalGates:
+          type: array
+          items: { type: string }
+    Observability:
+      type: object
+      required: [phase, runtimeLoggingEnabled, requestCorrelation, publicTelemetryMode, safeEventFields, forbiddenPublicFields]
+      properties:
+        phase: { type: string, const: SAI-V6_OBSERVABILITY_CONTRACT }
+        runtimeLoggingEnabled: { type: boolean }
+        requestCorrelation: { type: boolean, const: true }
+        responseRequestIdHeader: { type: boolean, const: true }
+        responseTraceIdHeader: { type: boolean, const: true }
+        serverTimingHeader: { type: boolean, const: true }
+        publicTelemetryMode: { type: string, const: CONFIGURATION_ONLY }
+        safeEventFields:
+          type: array
+          items: { type: string }
+        forbiddenPublicFields:
+          type: array
+          items: { type: string }
+        rawPromptLogging: { type: boolean, const: false }
+        rawIdentityLogging: { type: boolean, const: false }
+        rawSecretLogging: { type: boolean, const: false }
+    CostBoundary:
+      type: object
+      required: [mode, paidProvidersEnabled, paidOverageAllowed, resourceBindings, publicUsageTotalsExposed, tenantUsageDetailsExposed]
+      properties:
+        mode: { type: string, const: FREE_FIRST_FAIL_CLOSED }
+        paidProvidersEnabled: { type: boolean }
+        paidOverageAllowed: { type: boolean, const: false }
+        aiRuntimeEnabled: { type: boolean }
+        quotaRuntimeEnabled: { type: boolean }
+        quotaDefaults:
+          type: object
+          properties:
+            windowSeconds: { type: integer }
+            requestsPerWindow: { type: integer }
+            dailyAiRequests: { type: integer }
+        resourceBindings:
+          type: object
+          properties:
+            d1: { type: boolean }
+            r2: { type: boolean }
+            aiSearch: { type: boolean }
+        publicUsageTotalsExposed: { type: boolean, const: false }
+        tenantUsageDetailsExposed: { type: boolean, const: false }

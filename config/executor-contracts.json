@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "1.0",
+  "product": "SakthiAI",
+  "phase": "SAI-V5_CONTRACT_ONLY",
+  "externalExecutionImplemented": false,
+  "defaultExecutorState": "NO_EXECUTOR_BOUND",
+  "requiredLifecycle": [
+    "prepare",
+    "authorize",
+    "dry_run",
+    "execute",
+    "verify",
+    "commit_or_rollback"
+  ],
+  "globalRequirements": {
+    "tenantScoped": true,
+    "idempotencyRequired": true,
+    "approvalRequiredForConsequentialActions": true,
+    "dryRunRequiredWhenSupported": true,
+    "evidenceRequired": true,
+    "verifierRequired": true,
+    "rollbackOrCompensationPlanRequired": true,
+    "secretsServerSideOnly": true,
+    "boundedRetries": true,
+    "auditEventRequired": true,
+    "paidProviderAllowed": false,
+    "directMainWriteAllowed": false,
+    "forcePushAllowed": false
+  },
+  "contracts": [
+    {
+      "id": "sandbox_code",
+      "label": "Sandbox Code Executor",
+      "state": "NO_EXECUTOR_BOUND",
+      "actionClasses": ["read_only", "internal_write"],
+      "requiredControls": ["isolated_sandbox", "resource_limits", "command_allowlist", "artifact_capture", "verifier"]
+    },
+    {
+      "id": "repository",
+      "label": "Repository Executor",
+      "state": "NO_EXECUTOR_BOUND",
+      "actionClasses": ["repository_write"],
+      "requiredControls": ["isolated_branch", "idempotency_key", "approval", "tests", "diff_evidence", "rollback_ref", "no_force_push"]
+    },
+    {
+      "id": "connector",
+      "label": "External Connector Executor",
+      "state": "NO_EXECUTOR_BOUND",
+      "actionClasses": ["external_write"],
+      "requiredControls": ["scoped_credentials", "idempotency_key", "approval", "dry_run_or_preview", "response_evidence", "compensation_plan"]
+    },
+    {
+      "id": "publisher_messenger",
+      "label": "Publish & Message Executor",
+      "state": "NO_EXECUTOR_BOUND",
+      "actionClasses": ["publish", "message"],
+      "requiredControls": ["recipient_or_destination_scope", "content_preview", "approval", "idempotency_key", "delivery_evidence", "retraction_or_compensation_plan"]
+    },
+    {
+      "id": "deployment",
+      "label": "Deployment Executor",
+      "state": "NO_EXECUTOR_BOUND",
+      "actionClasses": ["deploy"],
+      "requiredControls": ["environment_allowlist", "change_plan", "approval", "preflight", "health_verification", "rollback_plan", "post_deploy_evidence"]
+    },
+    {
+      "id": "destructive",
+      "label": "Destructive Action Executor",
+      "state": "NO_EXECUTOR_BOUND",
+      "actionClasses": ["destructive"],
+      "requiredControls": ["explicit_red_classification", "owner_or_admin_approval", "impact_preview", "backup_or_recovery_evidence", "two_phase_commit", "post_action_verification"]
+    }
+  ]
+}

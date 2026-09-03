@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "5.0",
+  "product": "SakthiAI",
+  "policyMode": "FREE_FIRST_FAIL_CLOSED",
+  "legacyRuntimeImport": false,
+  "paidProviders": {
+    "enabled": false,
+    "silentFallback": false,
+    "ownerApprovalRequiredToEnable": true
+  },
+  "runtimeGates": {
+    "ai": false,
+    "identity": false,
+    "persistence": false,
+    "quota": false,
+    "research": false,
+    "code": false,
+    "agents": false,
+    "agentControl": false,
+    "agentExecutorBindings": false,
+    "agentExternalActions": false,
+    "agentVerifier": false,
+    "automation": false,
+    "knowledge": false,
+    "image": false,
+    "video": false,
+    "voice": false,
+    "artifacts": false,
+    "developer": false,
+    "observability": false,
+    "previewDeploy": false
+  },
+  "agentControl": {
+    "durableStateMachinePrepared": true,
+    "checkpointingPrepared": true,
+    "workerLeasesPrepared": true,
+    "approvalQueuePrepared": true,
+    "verifierEvidencePrepared": true,
+    "publicVerifierWrites": false,
+    "trustedVerifierRuntimeEnabled": false,
+    "boundedRetriesRequired": true,
+    "completionRequiresVerifierPass": true,
+    "externalActionsEnabled": false,
+    "riskModel": {
+      "green": "READ_ONLY_OR_INTERNAL_REVERSIBLE",
+      "amber": "APPROVAL_REQUIRED_FOR_REPOSITORY_OR_EXTERNAL_WRITE",
+      "red": "OWNER_APPROVAL_AND_SEPARATE_EXTERNAL_ACTION_GATE_REQUIRED"
+    }
+  },
+  "executorContracts": {
+    "phase": "SAI_V5_CONTRACT_ONLY",
+    "bindingGateEnabled": false,
+    "externalExecutionImplemented": false,
+    "boundExecutors": 0,
+    "providerNeutral": true,
+    "idempotencyRequired": true,
+    "approvalRequiredForConsequentialActions": true,
+    "dryRunRequiredWhenSupported": true,
+    "evidenceRequired": true,
+    "verifierRequired": true,
+    "rollbackOrCompensationPlanRequired": true,
+    "secretsServerSideOnly": true,
+    "auditEventRequired": true,
+    "paidProviderAllowed": false,
+    "directMainWriteAllowed": false,
+    "forcePushAllowed": false
+  },
+  "previewReadiness": {
+    "phase": "SAI_V6_SOURCE_PREVIEW_READINESS",
+    "productionReady": false,
+    "deploymentPerformed": false,
+    "browserQaPerformed": false,
+    "previewDeployEnabled": false,
+    "observabilityRuntimeEnabled": false,
+    "publicTelemetryMode": "CONFIGURATION_ONLY",
+    "tenantUsageDetailsPublic": false,
+    "repositoryEvidenceArtifactPrepared": true
+  },
+  "externalWrites": {
+    "default": "APPROVAL_REQUIRED",
+    "autonomousPublishing": false,
+    "autonomousDeployment": false,
+    "autonomousMessaging": false,
+    "destructiveActions": false,
+    "directMainBranchWrite": false,
+    "forcePush": false
+  },
+  "identity": {
+    "implementation": "CLOUDFLARE_ACCESS_RS256_JWT_VERIFICATION_READY_NOT_CONFIGURED",
+    "productionRequirement": "VERIFIED_ACCESS_OR_REVIEWED_OIDC_JWT",
+    "rawIdentityHeadersAccepted": false,
+    "issuerValidationRequired": true,
+    "audienceValidationRequired": true,
+    "expiryValidationRequired": true,
+    "signatureValidationRequired": true,
+    "tenantIsolationRequired": true,
+    "serverSideMembershipLookupRequired": true,
+    "rbacRequired": true,
+    "bearerAccessJwtDefault": false
+  },
+  "quota": {
+    "implementation": "D1_USAGE_LEDGER_FOUNDATION",
+    "enabled": false,
+    "paidOverage": false,
+    "behavior": "FAIL_CLOSED",
+    "defaultWindowSeconds": 60,
+    "defaultRequestsPerWindow": 30,
+    "defaultDailyAiRequests": 100
+  },
+  "cloudResources": {
+    "d1": {
+      "activation": "NOT_PROVISIONED",
+      "schemaPrepared": true,
+      "migrationExecutionTestPrepared": true,
+      "bindingPresentInWrangler": false,
+      "costPosture": "FREE_PLAN_FIRST",
+      "overagePolicy": "FAIL_CLOSED_AT_FREE_LIMITS"
+    },
+    "r2": {
+      "activation": "DISABLED_UNTIL_OWNER_APPROVAL",
+      "bindingPresentInWrangler": false,
+      "reason": "Free allowance exists but usage beyond allowance can be billable."
+    },
+    "aiSearch": {
+      "activation": "DISABLED_UNTIL_RUNTIME_PHASE",
+      "bindingPresentInWrangler": false,
+      "costPosture": "OPEN_BETA_FREE_WITHIN_LIMITS",
+      "note": "Workers AI and AI Gateway usage are governed separately."
+    }
+  },
+  "frontend": {
+    "saravanaiDataDependency": false,
+    "saravanaiRuntimeDependency": false,
+    "fakeSuccessStates": false,
+    "agentControlFakeMetrics": false,
+    "observabilityFakeMetrics": false,
+    "apiCache": false,
+    "browserSecretStorage": false
+  }
+}

@@ -1,0 +1,144 @@
+openapi: 3.1.0
+info:
+  title: SakthiAI Flagship API
+  version: 0.1.0
+  description: Clean SakthiAI API contract. No SaravanAI runtime dependency and no paid-provider fallback.
+servers:
+  - url: https://api-sakthiai.example.invalid
+    description: Placeholder only; replace after controlled hostname approval.
+paths:
+  /api/health:
+    get:
+      operationId: health
+      responses:
+        '200':
+          description: Service health
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/v1/status:
+    get:
+      operationId: status
+      responses:
+        '200':
+          description: Runtime and policy status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, status, release, policy, requestId]
+                properties:
+                  ok: { type: boolean }
+                  status: { type: string }
+                  release: { type: string }
+                  policy: { $ref: '#/components/schemas/Policy' }
+                  requestId: { type: string }
+  /api/v1/policy:
+    get:
+      operationId: policy
+      responses:
+        '200':
+          description: Effective runtime policy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, policy, requestId]
+                properties:
+                  ok: { type: boolean }
+                  policy: { $ref: '#/components/schemas/Policy' }
+                  requestId: { type: string }
+  /api/v1/capabilities:
+    get:
+      operationId: capabilities
+      responses:
+        '200':
+          description: Truthful capability states
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, capabilities, requestId]
+                properties:
+                  ok: { type: boolean }
+                  capabilities:
+                    type: array
+                    items: { $ref: '#/components/schemas/Capability' }
+                  requestId: { type: string }
+  /api/v1/chat:
+    post:
+      operationId: chat
+      description: Free-first chat. Returns RUNTIME_DISABLED until owner enables the SakthiAI runtime.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [prompt]
+              properties:
+                prompt:
+                  type: string
+                  minLength: 1
+                  maxLength: 12000
+                mode:
+                  type: string
+                  default: chat
+                provider:
+                  type: string
+                  enum: [auto]
+                budget:
+                  type: string
+                  enum: [economy]
+      responses:
+        '200':
+          description: AI answer from the approved SakthiAI runtime
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, answer, provider, model, costPolicy, requestId]
+                properties:
+                  ok: { type: boolean }
+                  answer: { type: string }
+                  provider: { type: string }
+                  model: { type: string }
+                  costPolicy: { type: string }
+                  requestId: { type: string }
+        '400': { description: Invalid input }
+        '413': { description: Request too large }
+        '503': { description: Runtime disabled or unavailable }
+components:
+  schemas:
+    Health:
+      type: object
+      required: [ok, status, product, runtime, requestId]
+      properties:
+        ok: { type: boolean }
+        status: { type: string }
+        product: { type: string, const: SakthiAI }
+        runtime: { type: string, enum: [enabled, disabled] }
+        requestId: { type: string }
+    Policy:
+      type: object
+      required: [product, runtimeMode, paidProvidersEnabled, silentPaidFallback, legacyRuntimeImport, externalWrites, browserSecrets, model]
+      properties:
+        product: { type: string, const: SakthiAI }
+        runtimeMode: { type: string }
+        paidProvidersEnabled: { type: boolean, const: false }
+        silentPaidFallback: { type: boolean, const: false }
+        legacyRuntimeImport: { type: boolean, const: false }
+        externalWrites: { type: string, const: approval_required }
+        browserSecrets: { type: boolean, const: false }
+        model: { type: string }
+    Capability:
+      type: object
+      required: [id, state]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        state:
+          type: string
+          enum: [RUNTIME_AVAILABLE, RUNTIME_DISABLED, NOT_WIRED, FRONTEND_READY, ENGINE_REQUIRED, PERSISTENCE_REQUIRED, FOUNDATION_READY]
