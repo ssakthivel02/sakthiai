@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "1.0",
+  "product": "SakthiAI",
+  "phase": "SAI-V6_PREVIEW_EVIDENCE_ONLY",
+  "deployment": {
+    "implemented": false,
+    "automaticDeploy": false,
+    "productionDeployAllowed": false,
+    "customDomainChangeAllowed": false,
+    "productionDnsChangeAllowed": false,
+    "previewDeployGate": "PREVIEW_DEPLOY_ENABLED",
+    "previewDeployGateDefault": false
+  },
+  "cloudBindings": {
+    "d1": false,
+    "r2": false,
+    "aiSearch": false,
+    "executorBindings": false
+  },
+  "runtimeActivation": {
+    "ai": false,
+    "identity": false,
+    "persistence": false,
+    "quota": false,
+    "agentControl": false,
+    "executorBindings": false,
+    "externalActions": false,
+    "trustedVerifier": false,
+    "paidProviders": false
+  },
+  "requiredRepositoryEvidence": [
+    "structural_safety",
+    "javascript_syntax",
+    "v5_policy_executor_ledger",
+    "v6_preview_observability_policy",
+    "cloudflare_access_crypto",
+    "agent_state_machine",
+    "executor_contract_safety",
+    "d1_migrations_0001_0002_0003",
+    "static_accessibility_responsive_contract"
+  ],
+  "requiredExternalEvidenceBeforeProduction": [
+    "main_branch_protection",
+    "required_ci_status",
+    "real_cloudflare_access_preview_configuration",
+    "controlled_preview_browser_qa",
+    "explicit_d1_owner_approval",
+    "preview_d1_backup_restore",
+    "preview_quota_concurrency",
+    "namespace_separation_reconfirmation"
+  ],
+  "browserQaStatus": "NOT_RUN_REQUIRES_CONTROLLED_PREVIEW",
+  "productionReady": false
+}
