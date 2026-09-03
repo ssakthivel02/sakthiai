@@ -2,6 +2,8 @@ name: Cut over clean SakthiAI to Cloudflare
 
 on:
   workflow_dispatch:
+  push:
+    branches: [release/cloudflare-cutover]
 
 permissions:
   contents: read
