@@ -1,9 +1,9 @@
-name: Deploy SakthiAI flagship preview
+name: Deploy clean SakthiAI flagship
 
 on:
   workflow_dispatch:
   push:
-    branches: [release/sakthiai-hi-tech-live]
+    branches: [main]
 
 permissions:
   contents: read
@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: sakthiai-pages-preview
+  group: sakthiai-pages-main
   cancel-in-progress: false
 
 jobs:
@@ -58,6 +58,7 @@ jobs:
           test ! -e dist/.github
           ! grep -Rni 'Owner data is locked' dist
           ! grep -Rni 'Private evidence ingestion' dist
+          ! grep -Rni 'Private AI Workspace' dist
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
@@ -70,6 +71,6 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy clean SakthiAI preview to GitHub Pages
+      - name: Deploy clean SakthiAI flagship to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
