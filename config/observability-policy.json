@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "1.0",
+  "product": "SakthiAI",
+  "phase": "SAI-V6_OBSERVABILITY_CONTRACT",
+  "runtimeLoggingEnabledByDefault": false,
+  "publicTelemetryMode": "CONFIGURATION_ONLY",
+  "requestCorrelation": {
+    "requestId": true,
+    "traceId": true,
+    "w3cTraceparentAccepted": true,
+    "queryStringRecorded": false
+  },
+  "responseHeaders": {
+    "xSakthiAiRequestId": true,
+    "xSakthiAiTraceId": true,
+    "serverTiming": true
+  },
+  "safeEventFields": [
+    "requestId",
+    "traceId",
+    "method",
+    "route",
+    "status",
+    "durationMs",
+    "outcomeCode"
+  ],
+  "forbiddenPublicFields": [
+    "prompt",
+    "messageBody",
+    "email",
+    "accessToken",
+    "authorization",
+    "cookie",
+    "jwt",
+    "tenantUsage",
+    "userIdentity",
+    "rawAuditPayload"
+  ],
+  "rawPromptLogging": false,
+  "rawIdentityLogging": false,
+  "rawSecretLogging": false,
+  "tenantUsageDetailsPublic": false,
+  "productionReadyClaimAllowed": false,
+  "browserQaClaimAllowedWithoutControlledPreview": false
+}
