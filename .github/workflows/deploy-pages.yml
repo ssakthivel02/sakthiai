@@ -1,25 +1,68 @@
-name: Deploy SakthiAI flagship
+name: Deploy SakthiAI flagship preview
+
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [release/sakthiai-hi-tech-live]
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 concurrency:
-  group: pages
+  group: sakthiai-pages-preview
   cancel-in-progress: false
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: test -f index.html && test -f assets/styles.css && test -f assets/app.js
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: JavaScript syntax
+        shell: bash
+        run: find src scripts assets -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | xargs -0 -n1 node --check
+      - name: Live-release isolation validation
+        run: node scripts/validate-live-release.mjs
+      - name: Identity and authorization crypto test
+        run: node scripts/test-auth.mjs
+      - name: Agent state-machine test
+        run: node scripts/test-agent-state.mjs
+      - name: Executor contract test
+        run: node scripts/test-executor-contracts.mjs
+      - name: Preview readiness test
+        run: node scripts/test-preview-readiness.mjs
+      - name: Static responsive/accessibility contract test
+        run: node scripts/test-static-ui.mjs
+      - name: D1 schema isolation test
+        run: python3 scripts/test_d1_migration.py
+      - name: Build public-only flagship assets
+        run: npm run build:site
+      - name: Verify deployment package excludes source/control files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          test -f dist/assets/styles.css
+          test -f dist/assets/app.js
+          test ! -e dist/src
+          test ! -e dist/config
+          test ! -e dist/migrations
+          test ! -e dist/scripts
+          test ! -e dist/.github
+          ! grep -Rni 'Owner data is locked' dist
+          ! grep -Rni 'Private evidence ingestion' dist
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: .
+          path: dist
+
   deploy:
     environment:
       name: github-pages
@@ -27,6 +70,6 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy clean SakthiAI preview to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
