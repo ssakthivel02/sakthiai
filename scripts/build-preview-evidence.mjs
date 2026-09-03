@@ -3,15 +3,17 @@ import path from 'node:path';
 
 const outDir='artifacts';
 fs.mkdirSync(outDir,{recursive:true});
+const evidenceSha=process.env.SAKTHIAI_EVIDENCE_SHA||process.env.GITHUB_SHA||'local-uncommitted';
 const manifest={
   schemaVersion:'1.0',
   product:'SakthiAI',
   phase:'SAI-V6_PREVIEW_EVIDENCE',
   generatedAt:new Date().toISOString(),
   repository:process.env.GITHUB_REPOSITORY||'local',
-  commitSha:process.env.GITHUB_SHA||'local-uncommitted',
+  commitSha:evidenceSha,
   workflowRun:process.env.GITHUB_RUN_NUMBER||'local',
   evidenceScope:'REPOSITORY_ONLY',
+  validatedRefMode:process.env.SAKTHIAI_EVIDENCE_SHA?'EXPLICIT_HEAD_SHA':'LOCAL_OR_EVENT_SHA',
   productionActivation:false,
   deploymentPerformed:false,
   cloudResourcesProvisioned:false,
@@ -43,4 +45,4 @@ const manifest={
 };
 const output=path.join(outDir,'preview-evidence.json');
 fs.writeFileSync(output,JSON.stringify(manifest,null,2)+'\n','utf8');
-console.log(`SAKTHIAI_V6_PREVIEW_EVIDENCE_WRITTEN:${output}`);
+console.log(`SAKTHIAI_V6_PREVIEW_EVIDENCE_WRITTEN:${output}:${evidenceSha}`);
