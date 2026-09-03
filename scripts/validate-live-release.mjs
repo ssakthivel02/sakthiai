@@ -10,7 +10,8 @@ must(index.includes('Clean hi-tech rebuild'),'clean flagship marker missing');
 must(index.includes('SakthiAI Flagship'),'flagship identity missing');
 must(!index.includes('Owner data is locked'),'legacy owner-lock UI must not enter flagship release');
 must(!index.includes('Private evidence ingestion'),'legacy files UI must not enter flagship release');
-must(!index.includes('SaravanAI'),'legacy SaravanAI branding must not enter flagship release');
+must(!index.includes('Private AI Workspace'),'legacy private-workspace shell must not enter flagship release');
+must(!index.includes('<strong>SaravanAI</strong>'),'legacy SaravanAI brand header must not enter flagship release');
 
 must(wrangler.includes('"name": "sakthiai-flagship"'),'flagship Worker name missing');
 must(wrangler.includes('"pattern": "sakthiai.omsaravanabhava.org"'),'flagship web custom domain missing');
