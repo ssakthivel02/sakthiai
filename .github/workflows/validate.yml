@@ -27,9 +27,13 @@ jobs:
           test -f assets/runtime.js
           test -f assets/agent-control.css
           test -f assets/agent-control-ui.js
+          test -f assets/observability.css
+          test -f assets/observability-ui.js
           test -f config/runtime-policy.json
           test -f config/capability-contracts.json
           test -f config/executor-contracts.json
+          test -f config/observability-policy.json
+          test -f config/preview-release-contract.json
           test -f src/worker.js
           test -f src/auth.js
           test -f src/rbac.js
@@ -40,16 +44,22 @@ jobs:
           test -f src/agent-leases.js
           test -f src/agent-queries.js
           test -f src/executor-contracts.js
+          test -f src/observability.js
           test -f migrations/0001_foundation.sql
           test -f migrations/0002_agent_control.sql
           test -f migrations/0003_executor_control.sql
           test -f openapi/sakthiai-v4.yaml
           test -f openapi/sakthiai-v5.yaml
+          test -f openapi/sakthiai-v6.yaml
           test -f scripts/validate-v5-ledger.mjs
+          test -f scripts/validate-v6-preview.mjs
           test -f scripts/test-auth.mjs
           test -f scripts/test-agent-state.mjs
           test -f scripts/test-executor-contracts.mjs
+          test -f scripts/test-preview-readiness.mjs
+          test -f scripts/test-static-ui.mjs
           test -f scripts/test_d1_migration.py
+          test -f scripts/build-preview-evidence.mjs
           test -f manifest.webmanifest
           test -f sw.js
           test -f offline.html
@@ -57,7 +67,9 @@ jobs:
           grep -q 'prefers-reduced-motion' assets/styles.css
           grep -q 'serviceWorker' assets/app.js
           grep -q "import('./agent-control-ui.js')" assets/app.js
+          grep -q "import('./observability-ui.js')" assets/app.js
           grep -q 'SAI-V5 Agent Control Center' assets/agent-control-ui.js
+          grep -q 'SAI-V6 Preview Readiness Observatory' assets/observability-ui.js
           grep -q '"enabled": false' config/runtime-policy.json
           grep -q '"silentFallback": false' config/runtime-policy.json
           grep -q '"legacyRuntimeImport": false' config/runtime-policy.json
@@ -65,7 +77,10 @@ jobs:
           grep -q '"agentExecutorBindings": false' config/runtime-policy.json
           grep -q '"agentExternalActions": false' config/runtime-policy.json
           grep -q '"agentVerifier": false' config/runtime-policy.json
+          grep -q '"observability": false' config/runtime-policy.json
+          grep -q '"previewDeploy": false' config/runtime-policy.json
           grep -q '"externalExecutionImplemented": false' config/executor-contracts.json
+          grep -q '"productionReady": false' config/preview-release-contract.json
           grep -q "url.pathname.startsWith('/api/')" sw.js
           ! grep -Rni 'Access-Control-Allow-Origin: \*' assets config index.html src wrangler.jsonc sw.js --exclude-dir=.git
           ! grep -Rni 'saravanai.omsaravanabhava.org' assets config index.html src --exclude-dir=.git
@@ -75,13 +90,25 @@ jobs:
         run: |
           set -euo pipefail
           find src scripts assets -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | xargs -0 -n1 node --check
-      - name: Flagship V5 policy and executor-ledger validators
+      - name: Flagship V6 policy, executor-ledger and preview validators
         run: npm run validate
       - name: Cloudflare Access JWT cryptographic test
-        run: node scripts/test-auth.mjs
+        run: npm run test:auth
       - name: Agent state-machine test
-        run: node scripts/test-agent-state.mjs
+        run: npm run test:agent
       - name: Executor contract safety test
-        run: node scripts/test-executor-contracts.mjs
+        run: npm run test:executor
+      - name: Preview readiness and correlation test
+        run: npm run test:preview
+      - name: Static accessibility and responsive contract test
+        run: npm run test:ui
       - name: D1 V5 migration and tenant-isolation test
-        run: python3 scripts/test_d1_migration.py
+        run: npm run test:migration
+      - name: Build exact-head preview evidence manifest
+        run: npm run evidence:preview
+      - name: Upload preview evidence manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: sakthiai-v6-preview-evidence-${{ github.sha }}
+          path: artifacts/preview-evidence.json
+          retention-days: 14
