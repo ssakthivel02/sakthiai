@@ -87,7 +87,12 @@ must(!openapi.includes('/api/v1/deploy'),'V6 OpenAPI must expose no deploy endpo
 must(evidenceBuilder.includes("evidenceScope:'REPOSITORY_ONLY'"),'evidence artifact must be repository-only');
 must(evidenceBuilder.includes('productionActivation:false'),'evidence artifact must deny production activation');
 must(evidenceBuilder.includes('browserQaPerformed:false'),'evidence artifact must not claim browser QA');
+must(evidenceBuilder.includes('SAKTHIAI_EVIDENCE_SHA'),'evidence manifest must support explicit validated head SHA');
+must(workflow.includes("ref: ${{ github.event.pull_request.head.sha || github.sha }}"),'CI checkout must validate the actual PR/source head');
+must(workflow.includes('SAKTHIAI_EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}'),'CI must export the validated source head for evidence');
+must(workflow.includes('test "$ACTUAL_SHA" = "$SAKTHIAI_EVIDENCE_SHA"'),'CI must assert checkout SHA equals evidence SHA');
+must(workflow.includes('sakthiai-v6-preview-evidence-${{ github.event.pull_request.head.sha || github.sha }}'),'artifact name must use validated head SHA');
 must(!workflow.includes('wrangler deploy'),'validation workflow must not deploy');
 
 console.log('SAKTHIAI_V6_PREVIEW_OBSERVABILITY_VALIDATION_PASS');
-console.log(JSON.stringify({productionReady:false,deploymentPerformed:false,browserQaPerformed:false,observabilityRuntimeDefault:false,previewDeployDefault:false,publicTelemetry:'configuration-only',tenantUsagePublic:false,d1Binding:false,r2Binding:false,executorBindings:0},null,2));
+console.log(JSON.stringify({productionReady:false,deploymentPerformed:false,browserQaPerformed:false,trueHeadValidation:true,observabilityRuntimeDefault:false,previewDeployDefault:false,publicTelemetry:'configuration-only',tenantUsagePublic:false,d1Binding:false,r2Binding:false,executorBindings:0},null,2));
