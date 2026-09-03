@@ -8,8 +8,25 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      SAKTHIAI_EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Confirm validated revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SHA" = "$SAKTHIAI_EVIDENCE_SHA"
+          echo "Validated PR/source head: $ACTUAL_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Structural and safety validation
         shell: bash
         run: |
@@ -17,11 +34,92 @@ jobs:
           test -f index.html
           test -f assets/styles.css
           test -f assets/app.js
+          test -f assets/capabilities.js
+          test -f assets/runtime.js
+          test -f assets/agent-control.css
+          test -f assets/agent-control-ui.js
+          test -f assets/observability.css
+          test -f assets/observability-ui.js
+          test -f config/runtime-policy.json
+          test -f config/capability-contracts.json
+          test -f config/executor-contracts.json
+          test -f config/observability-policy.json
+          test -f config/preview-release-contract.json
+          test -f src/worker.js
+          test -f src/auth.js
+          test -f src/rbac.js
+          test -f src/quota.js
+          test -f src/agent-state.js
+          test -f src/agent-control.js
+          test -f src/agent-api.js
+          test -f src/agent-leases.js
+          test -f src/agent-queries.js
+          test -f src/executor-contracts.js
+          test -f src/observability.js
+          test -f migrations/0001_foundation.sql
+          test -f migrations/0002_agent_control.sql
+          test -f migrations/0003_executor_control.sql
+          test -f openapi/sakthiai-v4.yaml
+          test -f openapi/sakthiai-v5.yaml
+          test -f openapi/sakthiai-v6.yaml
+          test -f scripts/validate-v5-ledger.mjs
+          test -f scripts/validate-v6-preview.mjs
+          test -f scripts/test-auth.mjs
+          test -f scripts/test-agent-state.mjs
+          test -f scripts/test-executor-contracts.mjs
+          test -f scripts/test-preview-readiness.mjs
+          test -f scripts/test-static-ui.mjs
+          test -f scripts/test_d1_migration.py
+          test -f scripts/build-preview-evidence.mjs
           test -f manifest.webmanifest
           test -f sw.js
           test -f offline.html
           grep -q 'SakthiAI' index.html
           grep -q 'prefers-reduced-motion' assets/styles.css
           grep -q 'serviceWorker' assets/app.js
-          grep -q 'No hidden autonomous writes' index.html
-          ! grep -Rni 'Access-Control-Allow-Origin: \*' . --exclude-dir=.git
+          grep -q "import('./agent-control-ui.js')" assets/app.js
+          grep -q "import('./observability-ui.js')" assets/app.js
+          grep -q 'SAI-V5 Agent Control Center' assets/agent-control-ui.js
+          grep -q 'SAI-V6 Preview Readiness Observatory' assets/observability-ui.js
+          grep -q '"enabled": false' config/runtime-policy.json
+          grep -q '"silentFallback": false' config/runtime-policy.json
+          grep -q '"legacyRuntimeImport": false' config/runtime-policy.json
+          grep -q '"agentControl": false' config/runtime-policy.json
+          grep -q '"agentExecutorBindings": false' config/runtime-policy.json
+          grep -q '"agentExternalActions": false' config/runtime-policy.json
+          grep -q '"agentVerifier": false' config/runtime-policy.json
+          grep -q '"observability": false' config/runtime-policy.json
+          grep -q '"previewDeploy": false' config/runtime-policy.json
+          grep -q '"externalExecutionImplemented": false' config/executor-contracts.json
+          grep -q '"productionReady": false' config/preview-release-contract.json
+          grep -q "url.pathname.startsWith('/api/')" sw.js
+          ! grep -Rni 'Access-Control-Allow-Origin: \*' assets config index.html src wrangler.jsonc sw.js --exclude-dir=.git
+          ! grep -Rni 'saravanai.omsaravanabhava.org' assets config index.html src --exclude-dir=.git
+          ! grep -RniE '(^|[^A-Za-z0-9])(sk-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})' assets config index.html src wrangler.jsonc sw.js --exclude-dir=.git
+      - name: JavaScript syntax validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          find src scripts assets -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | xargs -0 -n1 node --check
+      - name: Flagship V6 policy, executor-ledger and preview validators
+        run: npm run validate
+      - name: Cloudflare Access JWT cryptographic test
+        run: npm run test:auth
+      - name: Agent state-machine test
+        run: npm run test:agent
+      - name: Executor contract safety test
+        run: npm run test:executor
+      - name: Preview readiness and correlation test
+        run: npm run test:preview
+      - name: Static accessibility and responsive contract test
+        run: npm run test:ui
+      - name: D1 V5 migration and tenant-isolation test
+        run: npm run test:migration
+      - name: Build exact-head preview evidence manifest
+        run: npm run evidence:preview
+      - name: Upload preview evidence manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: sakthiai-v6-preview-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: artifacts/preview-evidence.json
+          retention-days: 14

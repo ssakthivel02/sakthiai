@@ -1,0 +1,44 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sakthiai-flagship-api",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "vars": {
+    "AI_RUNTIME_ENABLED": "false",
+    "PAID_PROVIDERS_ENABLED": "false",
+    "LEGACY_RUNTIME_IMPORT": "false",
+    "PERSISTENCE_ENABLED": "false",
+    "IDENTITY_RUNTIME_ENABLED": "false",
+    "ALLOW_BEARER_ACCESS_JWT": "false",
+    "QUOTA_RUNTIME_ENABLED": "false",
+    "QUOTA_WINDOW_SECONDS": "60",
+    "QUOTA_REQUESTS_PER_WINDOW": "30",
+    "QUOTA_DAILY_AI_REQUESTS": "100",
+    "RESEARCH_RUNTIME_ENABLED": "false",
+    "CODE_RUNTIME_ENABLED": "false",
+    "AGENT_RUNTIME_ENABLED": "false",
+    "AGENT_CONTROL_ENABLED": "false",
+    "AGENT_EXECUTOR_BINDINGS_ENABLED": "false",
+    "AGENT_EXTERNAL_ACTIONS_ENABLED": "false",
+    "AGENT_VERIFIER_RUNTIME_ENABLED": "false",
+    "AUTOMATION_RUNTIME_ENABLED": "false",
+    "KNOWLEDGE_RUNTIME_ENABLED": "false",
+    "IMAGE_RUNTIME_ENABLED": "false",
+    "VIDEO_RUNTIME_ENABLED": "false",
+    "VOICE_RUNTIME_ENABLED": "false",
+    "ARTIFACT_RUNTIME_ENABLED": "false",
+    "DEVELOPER_RUNTIME_ENABLED": "false",
+    "OBSERVABILITY_RUNTIME_ENABLED": "false",
+    "PREVIEW_DEPLOY_ENABLED": "false",
+    "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fp8-fast"
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,202 @@
+openapi: 3.1.0
+info:
+  title: SakthiAI Agent Control Plane API
+  version: 0.4.0-foundation
+  description: >-
+    Durable SakthiAI agent-control contract. This public contract manages task state, checkpoints,
+    approval requests/decisions and read-only verifier/event history. Trusted verifier writes and
+    worker leases are internal-only. Autonomous external execution is not implemented. Paid providers,
+    external actions and production deployment remain disabled by default.
+servers:
+  - url: https://api-sakthiai.example.invalid
+    description: Placeholder only; controlled runtime hostname must be approved separately.
+security:
+  - CloudflareAccess: []
+paths:
+  /api/v1/agents/control/status:
+    get:
+      security: []
+      operationId: agentControlStatus
+      responses:
+        '200': { description: Fail-closed control-plane status including external-action and verifier gates }
+  /api/v1/agents/state-contract:
+    get:
+      security: []
+      operationId: agentStateContract
+      responses:
+        '200': { description: State, risk and transition contract }
+  /api/v1/agents/tasks:
+    post:
+      operationId: createAgentTask
+      parameters: [ { $ref: '#/components/parameters/Tenant' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAgentTask' }
+      responses:
+        '201': { description: Durable task created; execution has not started }
+        '401': { description: Verified identity required }
+        '403': { description: Tenant membership or RBAC denied }
+        '429': { description: Quota/rate limit reached }
+        '503': { description: Control plane, persistence or quota gate disabled }
+  /api/v1/agents/tasks/{taskId}:
+    get:
+      operationId: getAgentTask
+      parameters:
+        - { $ref: '#/components/parameters/Tenant' }
+        - { $ref: '#/components/parameters/TaskId' }
+      responses:
+        '200': { description: Tenant-scoped task and latest checkpoint }
+        '404': { description: Task not found in authorized tenant }
+  /api/v1/agents/tasks/{taskId}/transitions:
+    post:
+      operationId: transitionAgentTask
+      parameters:
+        - { $ref: '#/components/parameters/Tenant' }
+        - { $ref: '#/components/parameters/TaskId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [to]
+              properties:
+                to: { $ref: '#/components/schemas/TaskState' }
+                reason: { type: string, maxLength: 4000 }
+      responses:
+        '200': { description: Conditional state transition recorded }
+        '409': { description: Transition, approval, verifier or external-action gate blocks the change }
+  /api/v1/agents/tasks/{taskId}/checkpoints:
+    post:
+      operationId: createAgentCheckpoint
+      parameters:
+        - { $ref: '#/components/parameters/Tenant' }
+        - { $ref: '#/components/parameters/TaskId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [checkpoint]
+              properties:
+                state: { type: string, maxLength: 80 }
+                checkpoint: { type: object }
+      responses:
+        '201': { description: Durable resumable checkpoint created }
+  /api/v1/agents/tasks/{taskId}/approvals:
+    post:
+      operationId: requestAgentApproval
+      parameters:
+        - { $ref: '#/components/parameters/Tenant' }
+        - { $ref: '#/components/parameters/TaskId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [summary]
+              properties:
+                actionClass: { $ref: '#/components/schemas/ActionClass' }
+                summary: { type: string, minLength: 1, maxLength: 4000 }
+      responses:
+        '201': { description: Pending approval created and task placed in waiting_approval }
+        '409': { description: Terminal/inconsistent task state or existing pending approval }
+  /api/v1/agents/approvals:
+    get:
+      operationId: listAgentApprovalQueue
+      description: Owner/admin approval queue only.
+      parameters:
+        - { $ref: '#/components/parameters/Tenant' }
+        - name: state
+          in: query
+          schema: { type: string, enum: [pending, approved, rejected, expired, cancelled], default: pending }
+      responses:
+        '200': { description: Tenant-scoped approval queue }
+        '403': { description: Owner/admin permission required }
+  /api/v1/agents/approvals/{approvalId}/decision:
+    post:
+      operationId: decideAgentApproval
+      parameters:
+        - { $ref: '#/components/parameters/Tenant' }
+        - name: approvalId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approved, rejected] }
+                note: { type: string, maxLength: 4000 }
+      responses:
+        '200': { description: Approval decision recorded with audit event }
+        '409': { description: Approval already decided or task state conflict }
+  /api/v1/agents/tasks/{taskId}/verifiers:
+    get:
+      operationId: listVerifierRuns
+      description: Read-only verifier history. Verifier mutations require a future trusted internal verifier runtime and are not exposed by this public contract.
+      parameters:
+        - { $ref: '#/components/parameters/Tenant' }
+        - { $ref: '#/components/parameters/TaskId' }
+      responses:
+        '200': { description: Tenant-scoped verifier history }
+  /api/v1/agents/tasks/{taskId}/events:
+    get:
+      operationId: listAgentTaskEvents
+      parameters:
+        - { $ref: '#/components/parameters/Tenant' }
+        - { $ref: '#/components/parameters/TaskId' }
+      responses:
+        '200': { description: Append-only task event history }
+components:
+  securitySchemes:
+    CloudflareAccess:
+      type: apiKey
+      in: header
+      name: Cf-Access-Jwt-Assertion
+      description: RS256 JWT verified against controlled Cloudflare Access JWKS, issuer, audience and expiry.
+  parameters:
+    Tenant:
+      name: x-sakthiai-tenant
+      in: header
+      required: true
+      description: Tenant selector only. Authorization comes from verified identity plus server-side membership/RBAC.
+      schema: { type: string, minLength: 1 }
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    TaskState:
+      type: string
+      enum: [planned, queued, running, waiting_approval, paused, completed, failed, cancelled]
+    AutonomyClass:
+      type: string
+      enum: [green, amber, red]
+    ActionClass:
+      type: string
+      enum: [read_only, internal_write, repository_write, external_write, publish, message, deploy, destructive]
+    CreateAgentTask:
+      type: object
+      additionalProperties: false
+      required: [title, objective]
+      properties:
+        projectId: { type: [string, 'null'] }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        objective: { type: string, minLength: 1, maxLength: 12000 }
+        taskType: { type: string, maxLength: 80, default: agent }
+        autonomyClass: { $ref: '#/components/schemas/AutonomyClass' }
+        actionClass: { $ref: '#/components/schemas/ActionClass' }

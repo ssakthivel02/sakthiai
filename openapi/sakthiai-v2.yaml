@@ -1,0 +1,182 @@
+openapi: 3.1.0
+info:
+  title: SakthiAI Flagship API
+  version: 0.2.0
+  description: >-
+    Clean SakthiAI V2 contract for free-first AI, durable projects/tasks,
+    research, engineering, agents and knowledge. All execution and persistence
+    gates default disabled; no paid-provider or legacy runtime fallback.
+servers:
+  - url: https://api-sakthiai.example.invalid
+    description: Placeholder only; production hostname requires explicit release approval.
+paths:
+  /api/health:
+    get:
+      operationId: health
+      responses:
+        '200': { description: Service health }
+  /api/v1/status:
+    get:
+      operationId: status
+      responses:
+        '200': { description: Effective runtime policy and release status }
+  /api/v1/policy:
+    get:
+      operationId: policy
+      responses:
+        '200': { description: Fail-closed cost and execution policy }
+  /api/v1/capabilities:
+    get:
+      operationId: capabilities
+      responses:
+        '200': { description: Truthful capability states }
+  /api/v1/persistence/status:
+    get:
+      operationId: persistenceStatus
+      responses:
+        '200': { description: D1 and identity readiness without exposing tenant data }
+  /api/v1/chat:
+    post:
+      operationId: chat
+      description: Free-first chat. Fails with RUNTIME_DISABLED until owner enables the approved runtime.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [prompt]
+              properties:
+                prompt: { type: string, minLength: 1, maxLength: 12000 }
+      responses:
+        '200': { description: AI response from approved free-first runtime }
+        '503': { description: Runtime disabled or unavailable; no paid fallback }
+  /api/v1/research/plan:
+    post:
+      operationId: researchPlan
+      description: Returns the evidence-first research execution contract only when the research gate is enabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: { type: string, minLength: 1, maxLength: 8000 }
+                freshness: { type: string, default: auto }
+      responses:
+        '200': { description: Research plan contract }
+        '503': { description: RESEARCH_RUNTIME_DISABLED }
+  /api/v1/code/plan:
+    post:
+      operationId: codePlan
+      description: Produces a sandbox-required engineering plan; does not imply repository writes occurred.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [objective]
+              properties:
+                objective: { type: string, minLength: 1, maxLength: 12000 }
+                scope: { type: string, default: repository }
+      responses:
+        '200': { description: Engineering execution plan }
+        '503': { description: CODE_RUNTIME_DISABLED }
+  /api/v1/agents/plan:
+    post:
+      operationId: agentPlan
+      description: Produces a resumable agent plan contract with verifier and approval requirements.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [objective]
+              properties:
+                objective: { type: string, minLength: 1, maxLength: 12000 }
+                autonomyClass: { type: string, enum: [green, amber, red], default: green }
+      responses:
+        '200': { description: Agent task-state contract }
+        '503': { description: AGENT_RUNTIME_DISABLED }
+  /api/v1/knowledge/query:
+    post:
+      operationId: knowledgeQuery
+      description: Knowledge/RAG contract requiring approved evidence and provenance.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: { type: string, minLength: 1, maxLength: 8000 }
+      responses:
+        '200': { description: Retrieval plan contract }
+        '503': { description: KNOWLEDGE_RUNTIME_DISABLED }
+  /api/v1/projects:
+    get:
+      operationId: listProjects
+      description: Tenant-scoped durable project list. Requires persistence plus verified identity runtime.
+      responses:
+        '200': { description: Projects }
+        '401': { description: Identity runtime disabled or identity missing }
+        '503': { description: Persistence disabled or D1 binding missing }
+    post:
+      operationId: createProject
+      description: Creates tenant-scoped project metadata only after persistence and identity gates are enabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                description: { type: string, maxLength: 4000 }
+      responses:
+        '201': { description: Project created }
+        '401': { description: Verified identity required }
+        '503': { description: Persistence disabled }
+  /api/v1/tasks:
+    get:
+      operationId: listTasks
+      description: Tenant-scoped durable task ledger.
+      responses:
+        '200': { description: Tasks }
+        '401': { description: Verified identity required }
+        '503': { description: Persistence disabled }
+    post:
+      operationId: createPlannedTask
+      description: Creates a planned task only. It does not execute tools or external writes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [taskType, title, objective]
+              properties:
+                projectId: { type: [string, 'null'] }
+                taskType: { type: string, maxLength: 80 }
+                title: { type: string, maxLength: 200 }
+                objective: { type: string, maxLength: 12000 }
+                autonomyClass: { type: string, enum: [green, amber, red], default: green }
+      responses:
+        '201': { description: Planned task recorded with execution NOT_STARTED }
+        '401': { description: Verified identity required }
+        '503': { description: Persistence disabled }
+components:
+  schemas:
+    CapabilityState:
+      type: string
+      enum: [RUNTIME_AVAILABLE, RUNTIME_DISABLED, CONTRACT_READY, PERSISTENCE_DISABLED, ENGINE_REQUIRED, FRONTEND_READY]
+    AutonomyClass:
+      type: string
+      enum: [green, amber, red]

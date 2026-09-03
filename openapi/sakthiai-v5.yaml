@@ -1,0 +1,120 @@
+openapi: 3.1.0
+info:
+  title: SakthiAI Agent Control Center & Executor Contracts
+  version: 0.5.0-foundation
+  description: >-
+    Read-only control metadata plus provider-neutral executor contract schemas. No executor binding,
+    external execution, deployment, publishing, messaging or destructive-action endpoint is exposed
+    by this foundation.
+servers:
+  - url: https://api-sakthiai.example.invalid
+    description: Placeholder only; production namespace is not configured by this contract.
+paths:
+  /api/v1/agents/control/status:
+    get:
+      security: []
+      operationId: getAgentControlStatus
+      responses:
+        '200':
+          description: Agent-control safety-gate state.
+  /api/v1/agents/state-contract:
+    get:
+      security: []
+      operationId: getAgentStateContract
+      responses:
+        '200':
+          description: Durable task-state and transition contract.
+  /api/v1/agents/executors/contracts:
+    get:
+      security: []
+      operationId: getExecutorContracts
+      description: >-
+        Returns contract metadata only. Every executor remains NO_EXECUTOR_BOUND and
+        externalExecutionImplemented is false in SAI-V5.
+      responses:
+        '200':
+          description: Provider-neutral executor contract registry.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, registry, requestId]
+                properties:
+                  ok: { type: boolean, const: true }
+                  requestId: { type: string }
+                  registry:
+                    $ref: '#/components/schemas/ExecutorRegistry'
+components:
+  schemas:
+    ExecutorRegistry:
+      type: object
+      required: [phase, externalExecutionImplemented, lifecycle, contracts, globalRequirements]
+      properties:
+        phase: { type: string, const: SAI-V5_CONTRACT_ONLY }
+        externalExecutionImplemented: { type: boolean, const: false }
+        lifecycle:
+          type: array
+          prefixItems:
+            - { type: string, const: prepare }
+            - { type: string, const: authorize }
+            - { type: string, const: dry_run }
+            - { type: string, const: execute }
+            - { type: string, const: verify }
+            - { type: string, const: commit_or_rollback }
+        contracts:
+          type: array
+          items: { $ref: '#/components/schemas/ExecutorContract' }
+        globalRequirements:
+          $ref: '#/components/schemas/GlobalExecutorRequirements'
+    ExecutorContract:
+      type: object
+      required: [id, label, state, actionClasses, requiredControls]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        state: { type: string, const: NO_EXECUTOR_BOUND }
+        actionClasses:
+          type: array
+          items: { $ref: '#/components/schemas/ActionClass' }
+        requiredControls:
+          type: array
+          items: { type: string }
+    ActionClass:
+      type: string
+      enum: [read_only, internal_write, repository_write, external_write, publish, message, deploy, destructive]
+    GlobalExecutorRequirements:
+      type: object
+      required: [tenantScoped, idempotencyRequired, approvalRequiredForConsequentialActions, evidenceRequired, verifierRequired, rollbackOrCompensationPlanRequired, secretsServerSideOnly, paidProviderAllowed, directMainWriteAllowed, forcePushAllowed]
+      properties:
+        tenantScoped: { type: boolean, const: true }
+        idempotencyRequired: { type: boolean, const: true }
+        approvalRequiredForConsequentialActions: { type: boolean, const: true }
+        dryRunRequiredWhenSupported: { type: boolean, const: true }
+        evidenceRequired: { type: boolean, const: true }
+        verifierRequired: { type: boolean, const: true }
+        rollbackOrCompensationPlanRequired: { type: boolean, const: true }
+        secretsServerSideOnly: { type: boolean, const: true }
+        boundedRetries: { type: boolean, const: true }
+        auditEventRequired: { type: boolean, const: true }
+        paidProviderAllowed: { type: boolean, const: false }
+        directMainWriteAllowed: { type: boolean, const: false }
+        forcePushAllowed: { type: boolean, const: false }
+    ExecutionEnvelope:
+      description: >-
+        Future internal executor envelope contract. No public path accepts this schema in SAI-V5.
+      type: object
+      required: [taskId, tenantId, actionClass, idempotencyKey, verifierId, evidenceRequirements, rollbackPlan]
+      properties:
+        taskId: { type: string }
+        tenantId: { type: string }
+        actionClass: { $ref: '#/components/schemas/ActionClass' }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 200 }
+        approvalId: { type: [string, 'null'] }
+        verifierId: { type: string }
+        evidenceRequirements:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { type: string }
+        rollbackPlan: { type: string, minLength: 1, maxLength: 8000 }
+        dryRun: { type: boolean, default: true }
