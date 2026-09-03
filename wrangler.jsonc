@@ -1,11 +1,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "sakthiai-flagship-api",
+  "name": "sakthiai-flagship",
   "main": "src/worker.js",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "sakthiai.omsaravanabhava.org",
+      "custom_domain": true
+    },
+    {
+      "pattern": "api-sakthiai.omsaravanabhava.org",
+      "custom_domain": true
+    }
+  ],
   "vars": {
     "AI_RUNTIME_ENABLED": "false",
     "PAID_PROVIDERS_ENABLED": "false",
@@ -37,6 +47,12 @@
   },
   "ai": {
     "binding": "AI"
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/health"]
   },
   "observability": {
     "enabled": true
