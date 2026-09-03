@@ -96,7 +96,6 @@ export function finalizeResponse(response,context,env={}){
   headers.set('x-sakthiai-request-id',context.requestId);
   headers.set('x-sakthiai-trace-id',context.traceId);
   headers.set('server-timing',`sakthiai;dur=${durationMs}`);
-  headers.set('timing-allow-origin','same-origin');
   if(enabled(env,'OBSERVABILITY_RUNTIME_ENABLED')){
     console.log(JSON.stringify({
       type:'sakthiai_request',
