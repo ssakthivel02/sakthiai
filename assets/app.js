@@ -95,5 +95,6 @@
 
   const clock=$('#consoleClock');setInterval(()=>{if(clock)clock.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});},1000);
   import('./agent-control-ui.js').catch(()=>{});
+  import('./observability-ui.js').catch(()=>{});
   if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 })();
