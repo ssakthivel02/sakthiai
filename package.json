@@ -1,6 +1,6 @@
 {
   "name": "sakthiai-flagship",
-  "version": "0.6.0-hi-tech-v6-preview-observability",
+  "version": "0.6.1-hi-tech-v6-live-packaging",
   "private": true,
   "type": "module",
   "description": "Clean SakthiAI Intelligence OS with verified identity, durable agent safety, provider-neutral executor contracts, preview readiness and privacy-bounded observability.",
@@ -13,6 +13,7 @@
     "test:ui": "node scripts/test-static-ui.mjs",
     "test:migration": "python3 scripts/test_d1_migration.py",
     "evidence:preview": "node scripts/build-preview-evidence.mjs",
+    "build:site": "node scripts/build-static.mjs",
     "test": "npm run validate && npm run test:auth && npm run test:agent && npm run test:executor && npm run test:preview && npm run test:ui && npm run test:migration"
   },
   "engines": {
