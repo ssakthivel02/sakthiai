@@ -1,0 +1,70 @@
+name: Cut over clean SakthiAI to Cloudflare
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sakthiai-cloudflare-live
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate clean live release
+        run: node scripts/validate-live-release.mjs
+      - name: Security and state tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-auth.mjs
+          node scripts/test-agent-state.mjs
+          node scripts/test-executor-contracts.mjs
+          node scripts/test-preview-readiness.mjs
+          node scripts/test-static-ui.mjs
+          python3 scripts/test_d1_migration.py
+      - name: Build public-only site
+        run: npm run build:site
+      - name: Assert live package remains isolated
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          test ! -e dist/src
+          test ! -e dist/config
+          test ! -e dist/migrations
+          ! grep -Rni 'Owner data is locked' dist
+          ! grep -Rni 'Private evidence ingestion' dist
+          ! grep -Rni 'Private AI Workspace' dist
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build public-only site
+        run: npm run build:site
+      - name: Require Cloudflare deployment credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+      - name: Deploy clean flagship to SakthiAI custom domains
+        run: npx --yes wrangler@latest deploy --config wrangler.live.jsonc --keep-vars
