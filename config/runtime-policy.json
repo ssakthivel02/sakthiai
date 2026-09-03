@@ -26,7 +26,9 @@
     "video": false,
     "voice": false,
     "artifacts": false,
-    "developer": false
+    "developer": false,
+    "observability": false,
+    "previewDeploy": false
   },
   "agentControl": {
     "durableStateMachinePrepared": true,
@@ -62,6 +64,17 @@
     "paidProviderAllowed": false,
     "directMainWriteAllowed": false,
     "forcePushAllowed": false
+  },
+  "previewReadiness": {
+    "phase": "SAI_V6_SOURCE_PREVIEW_READINESS",
+    "productionReady": false,
+    "deploymentPerformed": false,
+    "browserQaPerformed": false,
+    "previewDeployEnabled": false,
+    "observabilityRuntimeEnabled": false,
+    "publicTelemetryMode": "CONFIGURATION_ONLY",
+    "tenantUsageDetailsPublic": false,
+    "repositoryEvidenceArtifactPrepared": true
   },
   "externalWrites": {
     "default": "APPROVAL_REQUIRED",
@@ -120,6 +133,7 @@
     "saravanaiRuntimeDependency": false,
     "fakeSuccessStates": false,
     "agentControlFakeMetrics": false,
+    "observabilityFakeMetrics": false,
     "apiCache": false,
     "browserSecretStorage": false
   }
