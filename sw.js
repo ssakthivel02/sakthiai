@@ -1,5 +1,5 @@
-const CACHE='sakthiai-hi-tech-v5-20260903';
-const CORE=['./','./index.html','./assets/styles.css','./assets/capabilities.js','./assets/runtime.js','./assets/app.js','./assets/agent-control-ui.js','./assets/agent-control.css','./manifest.webmanifest','./offline.html'];
+const CACHE='sakthiai-hi-tech-v6-20260903';
+const CORE=['./','./index.html','./assets/styles.css','./assets/capabilities.js','./assets/runtime.js','./assets/app.js','./assets/agent-control-ui.js','./assets/agent-control.css','./assets/observability-ui.js','./assets/observability.css','./manifest.webmanifest','./offline.html'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));});
 self.addEventListener('fetch',event=>{
