@@ -66,21 +66,21 @@ must(agentCapability?.executionImplemented===false,'agent external execution mus
 must(agentCapability?.controlGate==='AGENT_CONTROL_ENABLED','agent control gate contract missing');
 must(agentCapability?.externalActionGate==='AGENT_EXTERNAL_ACTIONS_ENABLED','agent external-action gate contract missing');
 
-must(policy.schemaVersion==='5.0','runtime policy must be SAI-V5');
+must(policy.schemaVersion==='5.0','runtime policy must preserve the V5 core schema');
 must(policy.paidProviders.enabled===false,'paid providers must remain disabled');
 must(policy.paidProviders.silentFallback===false,'silent paid fallback must remain disabled');
 must(policy.legacyRuntimeImport===false,'legacy runtime import must remain disabled');
 must(policy.frontend.saravanaiDataDependency===false,'SaravanAI data dependency must remain disabled');
 must(policy.frontend.saravanaiRuntimeDependency===false,'SaravanAI runtime dependency must remain disabled');
 must(policy.frontend.agentControlFakeMetrics===false,'agent control center must not use fake tenant metrics');
-must(Object.values(policy.runtimeGates).every(v=>v===false),'every V5 runtime gate must default disabled');
+must(Object.values(policy.runtimeGates).every(v=>v===false),'every runtime gate must default disabled');
 must(policy.agentControl.externalActionsEnabled===false,'agent external actions must default disabled');
 must(policy.agentControl.publicVerifierWrites===false,'public verifier writes must remain disabled');
 must(policy.agentControl.trustedVerifierRuntimeEnabled===false,'trusted verifier runtime must default disabled');
 must(policy.agentControl.completionRequiresVerifierPass===true,'task completion must require verifier pass');
 must(policy.executorContracts.bindingGateEnabled===false,'executor binding gate must default disabled');
 must(policy.executorContracts.externalExecutionImplemented===false,'external executor implementation must remain false');
-must(policy.executorContracts.boundExecutors===0,'no executor may be bound in V5');
+must(policy.executorContracts.boundExecutors===0,'no executor may be bound');
 must(policy.executorContracts.idempotencyRequired===true,'executor idempotency must be required');
 must(policy.executorContracts.approvalRequiredForConsequentialActions===true,'executor consequential approval must be required');
 must(policy.executorContracts.evidenceRequired===true&&policy.executorContracts.verifierRequired===true,'executor evidence/verifier requirements missing');
@@ -106,7 +106,7 @@ must(!wrangler.includes('r2_buckets'),'R2 binding must remain unprovisioned in p
 must(!wrangler.includes('ACCESS_TEAM_DOMAIN'),'Access team domain must be supplied only at controlled runtime configuration');
 must(!wrangler.includes('ACCESS_AUD'),'Access audience must be supplied only at controlled runtime configuration');
 
-must(worker.includes("release:'flagship-hi-tech-v5-control-center-contracts'"),'Worker release marker must be V5');
+must(worker.includes("release:'flagship-hi-tech-v6-preview-observability-foundation'"),'Worker release marker must be V6');
 must(worker.includes('authenticateRequest'),'Worker must authenticate protected execution');
 must(worker.includes('authorizeTenant'),'Worker must enforce server-side tenant RBAC');
 must(worker.includes('enforceQuota'),'Worker must enforce fail-closed quotas');
@@ -223,5 +223,5 @@ const secretPatterns=[
 for(const pattern of secretPatterns)must(!pattern.test(scanned),`secret-shaped credential found: ${pattern}`);
 must(!scanned.includes('Access-Control-Allow-Origin: *'),'wildcard CORS must not be introduced');
 
-console.log('SAKTHIAI_FLAGSHIP_V5_VALIDATION_PASS');
+console.log('SAKTHIAI_FLAGSHIP_V6_VALIDATION_PASS');
 console.log(JSON.stringify({capabilities:12,paidProviders:false,silentPaidFallback:false,legacyRuntimeImport:false,verifiedAccessJwt:true,tenantRbac:true,quotaDefault:'disabled',agentControlDefault:'disabled',executorBindingDefault:'disabled',agentExternalActionsDefault:'disabled',trustedVerifierDefault:'disabled',publicVerifierWrites:false,agentExecutionImplemented:false,boundExecutors:0,controlCenterFakeMetrics:false,d1Binding:false,r2Binding:false,aiSearchBinding:false},null,2));
