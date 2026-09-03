@@ -6,6 +6,7 @@ import {quotaPolicy,enforceQuota,recordUsage} from './quota.js';
 import {agentControlState} from './agent-control.js';
 import {handleAgentApi} from './agent-api.js';
 import {executorContractRegistry} from './executor-contracts.js';
+import {createTraceContext,finalizeResponse,readinessSnapshot,costBoundarySnapshot,observabilitySnapshot} from './observability.js';
 
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer"};
 
@@ -28,6 +29,8 @@ function policy(env){const executors=executorContractRegistry();return {
   quota:quotaPolicy(env),
   agentControl:agentControlState(env),
   executorContracts:{phase:executors.phase,bindingGateEnabled:feature(env,'AGENT_EXECUTOR_BINDINGS_ENABLED'),externalExecutionImplemented:false,boundExecutors:0,contractCount:executors.contracts.length},
+  previewReadiness:readinessSnapshot(env),
+  observability:{runtimeLoggingEnabled:feature(env,'OBSERVABILITY_RUNTIME_ENABLED'),publicTelemetryMode:'CONFIGURATION_ONLY'},
   paidProvidersEnabled:false,
   silentPaidFallback:false,
   legacyRuntimeImport:false,
@@ -46,7 +49,9 @@ function policy(env){const executors=executorContractRegistry();return {
     knowledge:feature(env,'KNOWLEDGE_RUNTIME_ENABLED'),
     image:feature(env,'IMAGE_RUNTIME_ENABLED'),
     video:feature(env,'VIDEO_RUNTIME_ENABLED'),
-    voice:feature(env,'VOICE_RUNTIME_ENABLED')
+    voice:feature(env,'VOICE_RUNTIME_ENABLED'),
+    observability:feature(env,'OBSERVABILITY_RUNTIME_ENABLED'),
+    previewDeploy:feature(env,'PREVIEW_DEPLOY_ENABLED')
   }
 };}
 function capabilityRegistry(env){
@@ -152,28 +157,35 @@ async function persistenceResponse(request,env,id,operation){
 
 export default {
   async fetch(request,env){
-    const url=new URL(request.url);const id=requestId();
-    if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{'allow':'GET, POST, OPTIONS','cache-control':'no-store'}});
-    if(request.method==='GET'&&(url.pathname==='/api/health'||url.pathname==='/health'))return json({ok:true,status:'ok',product:'SakthiAI',runtime:bool(env.AI_RUNTIME_ENABLED)?'enabled':'disabled',persistence:persistenceState(env).state,identity:identityState(env).state,quota:quotaPolicy(env).enabled?'enabled':'disabled',agentControl:agentControlState(env),requestId:id});
-    if(request.method==='GET'&&url.pathname==='/api/v1/status')return json({ok:true,status:'ok',release:'flagship-hi-tech-v5-control-center-contracts',policy:policy(env),requestId:id});
-    if(request.method==='GET'&&url.pathname==='/api/v1/policy')return json({ok:true,policy:policy(env),requestId:id});
-    if(request.method==='GET'&&url.pathname==='/api/v1/capabilities')return json({ok:true,capabilities:capabilityRegistry(env),requestId:id});
-    if(request.method==='GET'&&url.pathname==='/api/v1/security/status')return json({ok:true,identity:identityState(env),quota:quotaPolicy(env),persistence:persistenceState(env),agentControl:agentControlState(env),requestId:id});
-    if(request.method==='GET'&&url.pathname==='/api/v1/persistence/status')return json({ok:true,persistence:persistenceState(env),identity:identityState(env),quota:quotaPolicy(env),requestId:id});
-    if(request.method==='GET'&&url.pathname==='/api/v1/agents/executors/contracts')return json({ok:true,bindingGateEnabled:feature(env,'AGENT_EXECUTOR_BINDINGS_ENABLED'),registry:executorContractRegistry(),requestId:id});
-    if(request.method==='POST'&&url.pathname==='/api/v1/chat')return handleChat(request,env,id);
-    if(request.method==='POST'&&url.pathname==='/api/v1/research/plan')return contractResponse(request,env,id,'research');
-    if(request.method==='POST'&&url.pathname==='/api/v1/code/plan')return contractResponse(request,env,id,'code');
-    if(request.method==='POST'&&url.pathname==='/api/v1/agents/plan')return contractResponse(request,env,id,'agents');
-    if(request.method==='POST'&&url.pathname==='/api/v1/knowledge/query')return contractResponse(request,env,id,'knowledge');
-    const agentResponse=await handleAgentApi(request,env,url,id);
-    if(agentResponse)return agentResponse;
-    if(request.method==='GET'&&url.pathname==='/api/v1/projects')return persistenceResponse(request,env,id,'projects-list');
-    if(request.method==='POST'&&url.pathname==='/api/v1/projects')return persistenceResponse(request,env,id,'projects-create');
-    if(request.method==='GET'&&url.pathname==='/api/v1/tasks')return persistenceResponse(request,env,id,'tasks-list');
-    if(request.method==='POST'&&url.pathname==='/api/v1/tasks')return persistenceResponse(request,env,id,'tasks-create');
-    if(url.pathname.startsWith('/api/'))return json({ok:false,code:'NOT_FOUND',requestId:id},404);
-    if(env.ASSETS)return env.ASSETS.fetch(request);
-    return json({ok:false,code:'ASSET_BINDING_MISSING',requestId:id},503);
+    const url=new URL(request.url);const id=requestId();const trace=createTraceContext(request,id);
+    let response;
+    if(request.method==='OPTIONS')response=new Response(null,{status:204,headers:{'allow':'GET, POST, OPTIONS','cache-control':'no-store'}});
+    else if(request.method==='GET'&&(url.pathname==='/api/health'||url.pathname==='/health'))response=json({ok:true,status:'ok',product:'SakthiAI',runtime:bool(env.AI_RUNTIME_ENABLED)?'enabled':'disabled',persistence:persistenceState(env).state,identity:identityState(env).state,quota:quotaPolicy(env).enabled?'enabled':'disabled',agentControl:agentControlState(env),readiness:readinessSnapshot(env).state,requestId:id});
+    else if(request.method==='GET'&&url.pathname==='/api/v1/status')response=json({ok:true,status:'ok',release:'flagship-hi-tech-v6-preview-observability-foundation',policy:policy(env),requestId:id});
+    else if(request.method==='GET'&&url.pathname==='/api/v1/policy')response=json({ok:true,policy:policy(env),requestId:id});
+    else if(request.method==='GET'&&url.pathname==='/api/v1/capabilities')response=json({ok:true,capabilities:capabilityRegistry(env),requestId:id});
+    else if(request.method==='GET'&&url.pathname==='/api/v1/readiness')response=json({ok:true,readiness:readinessSnapshot(env),requestId:id});
+    else if(request.method==='GET'&&url.pathname==='/api/v1/observability/status')response=json({ok:true,observability:observabilitySnapshot(env),requestId:id});
+    else if(request.method==='GET'&&url.pathname==='/api/v1/cost/status')response=json({ok:true,cost:costBoundarySnapshot(env),requestId:id});
+    else if(request.method==='GET'&&url.pathname==='/api/v1/security/status')response=json({ok:true,identity:identityState(env),quota:quotaPolicy(env),persistence:persistenceState(env),agentControl:agentControlState(env),requestId:id});
+    else if(request.method==='GET'&&url.pathname==='/api/v1/persistence/status')response=json({ok:true,persistence:persistenceState(env),identity:identityState(env),quota:quotaPolicy(env),requestId:id});
+    else if(request.method==='GET'&&url.pathname==='/api/v1/agents/executors/contracts')response=json({ok:true,bindingGateEnabled:feature(env,'AGENT_EXECUTOR_BINDINGS_ENABLED'),registry:executorContractRegistry(),requestId:id});
+    else if(request.method==='POST'&&url.pathname==='/api/v1/chat')response=await handleChat(request,env,id);
+    else if(request.method==='POST'&&url.pathname==='/api/v1/research/plan')response=await contractResponse(request,env,id,'research');
+    else if(request.method==='POST'&&url.pathname==='/api/v1/code/plan')response=await contractResponse(request,env,id,'code');
+    else if(request.method==='POST'&&url.pathname==='/api/v1/agents/plan')response=await contractResponse(request,env,id,'agents');
+    else if(request.method==='POST'&&url.pathname==='/api/v1/knowledge/query')response=await contractResponse(request,env,id,'knowledge');
+    else {
+      const agentResponse=await handleAgentApi(request,env,url,id);
+      if(agentResponse)response=agentResponse;
+      else if(request.method==='GET'&&url.pathname==='/api/v1/projects')response=await persistenceResponse(request,env,id,'projects-list');
+      else if(request.method==='POST'&&url.pathname==='/api/v1/projects')response=await persistenceResponse(request,env,id,'projects-create');
+      else if(request.method==='GET'&&url.pathname==='/api/v1/tasks')response=await persistenceResponse(request,env,id,'tasks-list');
+      else if(request.method==='POST'&&url.pathname==='/api/v1/tasks')response=await persistenceResponse(request,env,id,'tasks-create');
+      else if(url.pathname.startsWith('/api/'))response=json({ok:false,code:'NOT_FOUND',requestId:id},404);
+      else if(env.ASSETS)response=await env.ASSETS.fetch(request);
+      else response=json({ok:false,code:'ASSET_BINDING_MISSING',requestId:id},503);
+    }
+    return finalizeResponse(response,trace,env);
   }
 };
