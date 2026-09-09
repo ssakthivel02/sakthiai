@@ -17,10 +17,14 @@ assert.deepEqual(capacitySignalStateForTest(),{activeRequests:0});
 await assert.rejects(executeWithAdmission(env,{},async()=>{throw new Error('MODEL_FAIL');}),/MODEL_FAIL/);
 assert.deepEqual(capacitySignalStateForTest(),{activeRequests:0});
 
+const pressure=reserveCapacity(env);
+assert.equal(pressure.ok,true);
+assert.deepEqual(capacitySignalStateForTest(),{activeRequests:1});
 const calls=[];
 const runtime={...env,AI:{run:async(model,input)=>{calls.push({model,input});return {response:'ok'};}}};
 const result=await runChatModel(runtime,{messages:[{role:'user',content:'hello'}],maxTokens:700});
 assert.equal(result.ok,true);assert.equal(result.admission.decision,'DEGRADE');assert.equal(result.maxTokens,350);assert.equal(calls[0].input.max_tokens,350);
+pressure.release();
 assert.deepEqual(capacitySignalStateForTest(),{activeRequests:0});
 
 console.log('admission reconciliation tests: PASS');
