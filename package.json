@@ -1,9 +1,9 @@
 {
   "name": "sakthiai-flagship",
-  "version": "0.6.4-hi-tech-v6-durable-replay-p2",
+  "version": "0.6.5-hi-tech-v6-real-client-p3",
   "private": true,
   "type": "module",
-  "description": "Clean SakthiAI Intelligence OS with verified identity, durable agent safety, provider-neutral executor contracts, trusted-action policy proof, signed read-only external proposal intake, optional durable replay protection, preview readiness and privacy-bounded observability.",
+  "description": "Clean SakthiAI Intelligence OS with verified identity, durable agent safety, provider-neutral trusted-action controls, signed read-only proposal intake, optional durable replay protection, and a real external-client evidence kit.",
   "scripts": {
     "validate": "node scripts/validate.mjs && node scripts/validate-v5-ledger.mjs && node scripts/validate-v6-preview.mjs",
     "test:auth": "node scripts/test-auth.mjs",
@@ -12,13 +12,16 @@
     "test:gateway": "node scripts/test-trusted-action-gateway.mjs",
     "test:webhook": "node scripts/test-signed-agent-webhook.mjs",
     "test:replay": "node scripts/test-webhook-replay.mjs",
+    "test:client": "node scripts/test-real-client-kit.mjs",
+    "client:webhook": "node scripts/signed-webhook-client.mjs",
     "benchmark:webhook": "node scripts/build-signed-webhook-benchmark.mjs",
+    "benchmark:real-client": "node scripts/run-real-client-benchmark.mjs",
     "test:preview": "node scripts/test-preview-readiness.mjs",
     "test:ui": "node scripts/test-static-ui.mjs",
     "test:migration": "python3 scripts/test_d1_migration.py",
     "evidence:preview": "node scripts/build-preview-evidence.mjs",
     "build:site": "node scripts/build-static.mjs",
-    "test": "npm run validate && npm run test:auth && npm run test:agent && npm run test:executor && npm run test:gateway && npm run test:webhook && npm run test:replay && npm run test:preview && npm run test:ui && npm run test:migration"
+    "test": "npm run validate && npm run test:auth && npm run test:agent && npm run test:executor && npm run test:gateway && npm run test:webhook && npm run test:replay && npm run test:client && npm run test:preview && npm run test:ui && npm run test:migration"
   },
   "engines": {
     "node": ">=20"
