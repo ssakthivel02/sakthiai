@@ -1,0 +1,107 @@
+import {evaluateTrustedActionProposal} from './trusted-action-gateway.js';
+
+const VERSION='SAI-P1-SIGNED-AGENT-WEBHOOK-1';
+const MAX_BODY_BYTES=65536;
+
+function enabled(env,name){return String(env?.[name]||'').toLowerCase()==='true';}
+function text(value,max){const out=String(value??'').trim();return out&&out.length<=max?out:null;}
+function hex(bytes){return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+function constantTimeEqualHex(a,b){
+  const aa=String(a||'').toLowerCase(),bb=String(b||'').toLowerCase();
+  if(aa.length!==bb.length||aa.length===0)return false;
+  let diff=0;for(let i=0;i<aa.length;i++)diff|=aa.charCodeAt(i)^bb.charCodeAt(i);return diff===0;
+}
+async function hmacHex(secret,message){
+  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+  return hex(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(message)));
+}
+function signatureBase({timestamp,agentId,runId,tenantId,nonce,body}){
+  return `${timestamp}\n${agentId}\n${runId}\n${tenantId}\n${nonce}\n${body}`;
+}
+function maxSkewSeconds(env){const n=Number(env?.AGENT_WEBHOOK_MAX_SKEW_SECONDS||300);return Number.isFinite(n)&&n>=30&&n<=900?Math.floor(n):300;}
+
+export function signedAgentWebhookContract(env={}){
+  return {
+    version:VERSION,
+    enabled:enabled(env,'AGENT_WEBHOOK_ENABLED'),
+    phase:'P1_SIGNED_READ_ONLY_PROPOSAL_INTAKE',
+    authentication:'HMAC_SHA256_SHARED_SECRET',
+    secretBinding:'AGENT_WEBHOOK_SHARED_SECRET',
+    requiredHeaders:['x-sakthiai-agent-id','x-sakthiai-agent-run-id','x-sakthiai-tenant','x-sakthiai-timestamp','x-sakthiai-nonce','x-sakthiai-signature'],
+    signatureFormat:'v1=<hex-hmac-sha256>',
+    signatureInput:'timestamp\\nagentId\\nrunId\\ntenantId\\nnonce\\nrawBody',
+    maxSkewSeconds:maxSkewSeconds(env),
+    allowedActionClasses:['read_only'],
+    requestedExecution:'dry_run',
+    externalSideEffects:false,
+    executorBound:false,
+    durableReplayStore:false,
+    replayBoundary:'Timestamp + nonce + deterministic idempotency key are enforced, but P1 does not yet persist used nonces server-side.'
+  };
+}
+
+export async function createSignedAgentWebhookSignature(secret,{timestamp,agentId,runId,tenantId,nonce,body}){
+  const safeSecret=text(secret,4096);if(!safeSecret||safeSecret.length<32)throw new Error('AGENT_WEBHOOK_SECRET_WEAK');
+  return `v1=${await hmacHex(safeSecret,signatureBase({timestamp,agentId,runId,tenantId,nonce,body}))}`;
+}
+
+export async function evaluateSignedAgentWebhook(request,env={},nowMs=Date.now()){
+  if(!enabled(env,'AGENT_WEBHOOK_ENABLED'))return {ok:false,status:503,code:'AGENT_WEBHOOK_DISABLED'};
+  const secret=text(env.AGENT_WEBHOOK_SHARED_SECRET,4096);
+  if(!secret||secret.length<32)return {ok:false,status:503,code:'AGENT_WEBHOOK_SECRET_MISSING_OR_WEAK'};
+  const type=request.headers.get('content-type')||'';
+  if(!type.includes('application/json'))return {ok:false,status:400,code:'CONTENT_TYPE_REQUIRED'};
+  const length=Number(request.headers.get('content-length')||0);
+  if(length>MAX_BODY_BYTES)return {ok:false,status:413,code:'PAYLOAD_TOO_LARGE'};
+
+  const agentId=text(request.headers.get('x-sakthiai-agent-id'),120);
+  const runId=text(request.headers.get('x-sakthiai-agent-run-id'),200);
+  const tenantId=text(request.headers.get('x-sakthiai-tenant'),160);
+  const timestampRaw=text(request.headers.get('x-sakthiai-timestamp'),32);
+  const nonce=text(request.headers.get('x-sakthiai-nonce'),160);
+  const signature=text(request.headers.get('x-sakthiai-signature'),80);
+  if(!agentId||!runId||!tenantId||!timestampRaw||!nonce||!signature)return {ok:false,status:401,code:'AGENT_WEBHOOK_HEADERS_REQUIRED'};
+  if(!/^v1=[0-9a-fA-F]{64}$/.test(signature))return {ok:false,status:401,code:'AGENT_WEBHOOK_SIGNATURE_FORMAT_INVALID'};
+  const timestamp=Number(timestampRaw);
+  if(!Number.isFinite(timestamp)||timestamp<=0)return {ok:false,status:401,code:'AGENT_WEBHOOK_TIMESTAMP_INVALID'};
+  const skew=Math.abs(Math.floor(nowMs/1000)-Math.floor(timestamp));
+  if(skew>maxSkewSeconds(env))return {ok:false,status:401,code:'AGENT_WEBHOOK_TIMESTAMP_STALE',skewSeconds:skew};
+
+  let rawBody;
+  try{rawBody=await request.text();}catch{return {ok:false,status:400,code:'AGENT_WEBHOOK_BODY_READ_FAILED'};}
+  if(!rawBody||new TextEncoder().encode(rawBody).length>MAX_BODY_BYTES)return {ok:false,status:rawBody?413:400,code:rawBody?'PAYLOAD_TOO_LARGE':'AGENT_WEBHOOK_BODY_REQUIRED'};
+  const expected=await createSignedAgentWebhookSignature(secret,{timestamp:timestampRaw,agentId,runId,tenantId,nonce,body:rawBody});
+  if(!constantTimeEqualHex(signature.slice(3),expected.slice(3)))return {ok:false,status:401,code:'AGENT_WEBHOOK_SIGNATURE_INVALID'};
+
+  let body;
+  try{body=JSON.parse(rawBody);}catch{return {ok:false,status:400,code:'AGENT_WEBHOOK_JSON_INVALID'};}
+  const actionClass=String(body?.actionClass||'read_only').trim().toLowerCase();
+  if(actionClass!=='read_only')return {ok:false,status:403,code:'AGENT_WEBHOOK_P1_READ_ONLY_REQUIRED'};
+  if(String(body?.requestedExecution||'dry_run').trim().toLowerCase()!=='dry_run')return {ok:false,status:403,code:'AGENT_WEBHOOK_P1_EXECUTION_FORBIDDEN'};
+
+  const evaluation=await evaluateTrustedActionProposal({
+    sourceAgent:agentId,
+    sourceRunId:runId,
+    taskId:body?.taskId,
+    tenantId,
+    actionClass:'read_only',
+    action:body?.action,
+    rationale:body?.rationale,
+    target:body?.target,
+    idempotencyKey:`webhook:${agentId}:${nonce}`,
+    verifierId:'signed-webhook-transport-v1',
+    verifierState:'passed',
+    evidenceRequirements:['signed_request','transport_headers','proposal_payload','policy_decision'],
+    rollbackPlan:'Read-only P1 adapter performs no external write. Discard the evaluation/evidence receipt if verification fails.',
+    requestedExecution:'dry_run'
+  },{externalActionsEnabled:false,executorBindingEnabled:false,executorBound:false});
+
+  return {
+    ok:true,status:200,code:'AGENT_WEBHOOK_EVALUATED',version:VERSION,
+    transport:{authenticated:true,scheme:'HMAC_SHA256',agentId,runId,tenantId,nonce,timestamp:Number(timestampRaw),skewSeconds:skew,signatureExposed:false,secretExposed:false},
+    replayProtection:{durableNonceStore:false,idempotencyKey:`webhook:${agentId}:${nonce}`,note:'P1 enforces timestamp freshness and nonce-derived idempotency but does not persist used nonces server-side.'},
+    evaluation,
+    externalSideEffects:false,
+    executorBound:false
+  };
+}
