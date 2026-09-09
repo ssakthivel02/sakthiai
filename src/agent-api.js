@@ -6,6 +6,7 @@ import {agentControlState,createAgentTask,getAgentTask,transitionAgentTask,creat
 import {getLatestCheckpoint} from './agent-leases.js';
 import {listApprovalQueue,listTaskEvents,listVerifierRuns} from './agent-queries.js';
 import {trustedActionGatewayContract,evaluateTrustedActionProposal} from './trusted-action-gateway.js';
+import {signedAgentWebhookContract,evaluateSignedAgentWebhook} from './signed-agent-webhook.js';
 
 const HEADERS={"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer"};
 function json(body,status=200,extra={}){return new Response(JSON.stringify(body),{status,headers:{...HEADERS,...extra}});}
@@ -59,6 +60,13 @@ export async function handleAgentApi(request,env,url,id){
   if(request.method==='GET'&&path==='/api/v1/agents/control/status')return json({ok:true,control:agentControlState(env),externalExecutionImplemented:false,publicVerifierWrites:false,requestId:id});
   if(request.method==='GET'&&path==='/api/v1/agents/state-contract')return json({ok:true,contract:taskStateContract(),requestId:id});
   if(request.method==='GET'&&path==='/api/v1/agents/trusted-actions/contract')return json({ok:true,contract:trustedActionGatewayContract(),requestId:id});
+  if(request.method==='GET'&&path==='/api/v1/agents/external-proposals/contract')return json({ok:true,contract:signedAgentWebhookContract(env),requestId:id});
+
+  if(request.method==='POST'&&path==='/api/v1/agents/external-proposals/evaluate'){
+    const result=await evaluateSignedAgentWebhook(request,env);
+    const {status=200,...payload}=result||{};
+    return json({...payload,requestId:id},status);
+  }
 
   if(request.method==='POST'&&path==='/api/v1/agents/trusted-actions/evaluate')return secured(request,env,id,'agents_write',async access=>{
     const body=await readJson(request);
