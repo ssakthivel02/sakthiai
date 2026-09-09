@@ -1,0 +1,84 @@
+name: SakthiAI Trusted Action Gateway QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/trusted-action-gateway.js'
+      - 'src/agent-api.js'
+      - 'src/executor-contracts.js'
+      - 'scripts/test-trusted-action-gateway.mjs'
+      - 'package.json'
+      - 'docs/funding-readiness/trusted-action-gateway-p0.md'
+      - '.github/workflows/trusted-action-gateway-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gateway-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v5
+
+      - name: Use Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Syntax checks
+        run: |
+          node --check src/trusted-action-gateway.js
+          node --check src/agent-api.js
+          node --check scripts/test-trusted-action-gateway.mjs
+
+      - name: Public gateway contract route
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {handleAgentApi} from './src/agent-api.js';
+          const url=new URL('https://sakthiai.test/api/v1/agents/trusted-actions/contract');
+          const response=await handleAgentApi(new Request(url),{},url,'req_contract_test');
+          assert.equal(response.status,200);
+          const body=await response.json();
+          assert.equal(body.ok,true);
+          assert.equal(body.contract.phase,'P0_PROVIDER_NEUTRAL_POLICY_AND_DRY_RUN_PROOF');
+          assert.equal(body.contract.externalAgentBindingImplemented,false);
+          assert.equal(body.contract.externalSideEffectExecutionImplemented,false);
+          assert.equal(body.contract.invariants.dryRunOnly,true);
+          assert.equal(body.contract.invariants.isolatedBranchRequiredForRepositoryWrites,true);
+          console.log('SAKTHIAI_TRUSTED_ACTION_PUBLIC_CONTRACT_PASS');
+          NODE
+
+      - name: Trusted action 24-case harness
+        run: npm run test:gateway
+
+      - name: Full SakthiAI regression suite
+        run: npm test
+
+      - name: Funding-readiness evidence boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Live external-agent binding: **NO**' docs/funding-readiness/trusted-action-gateway-p0.md
+          grep -Fq 'External side-effect execution: **NO**' docs/funding-readiness/trusted-action-gateway-p0.md
+          grep -Fq 'externalAgentBindingImplemented:false' src/trusted-action-gateway.js
+          grep -Fq 'externalSideEffectExecutionImplemented:false' src/trusted-action-gateway.js
+          grep -Fq "requestedExecution!=='dry_run'" src/trusted-action-gateway.js
+          echo 'SAKTHIAI_TRUSTED_ACTION_EVIDENCE_BOUNDARY_PASS'
+
+      - name: QA summary
+        if: always()
+        run: |
+          echo '### SakthiAI Trusted Action Gateway — P0 QA' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Syntax/import boundary checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Public contract endpoint checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- 24-case provider-neutral policy matrix checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Existing SakthiAI regression suite checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- No live external-agent binding claimed' >> "$GITHUB_STEP_SUMMARY"
+          echo '- No external side effects claimed or executed' >> "$GITHUB_STEP_SUMMARY"
+          echo '- This is P0 funding-readiness proof, not production readiness' >> "$GITHUB_STEP_SUMMARY"
