@@ -59,8 +59,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'External side effects: **NO**' docs/funding-readiness/signed-agent-webhook-p1.md
-          grep -Fq 'Durable nonce replay store: **NO**' docs/funding-readiness/signed-agent-webhook-p1.md
+          grep -Fq 'External write execution: **NO**' docs/funding-readiness/signed-agent-webhook-p1.md
+          grep -Fq 'Durable replay/nonce store: **NO**' docs/funding-readiness/signed-agent-webhook-p1.md
           grep -Fq "allowedActionClasses:['read_only']" src/signed-agent-webhook.js
           grep -Fq "requestedExecution:'dry_run'" src/signed-agent-webhook.js
           grep -Fq 'externalSideEffects:false' src/signed-agent-webhook.js
