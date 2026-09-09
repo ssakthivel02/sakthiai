@@ -1,6 +1,7 @@
 import {evaluateTrustedActionProposal} from './trusted-action-gateway.js';
+import {webhookReplayStoreState,consumeWebhookNonce} from './webhook-replay-store.js';
 
-const VERSION='SAI-P1-SIGNED-AGENT-WEBHOOK-1';
+const VERSION='SAI-P2-SIGNED-AGENT-WEBHOOK-2';
 const MAX_BODY_BYTES=65536;
 
 function enabled(env,name){return String(env?.[name]||'').toLowerCase()==='true';}
@@ -24,10 +25,11 @@ function scope(env){return {agents:list(env?.AGENT_WEBHOOK_ALLOWED_AGENTS),tenan
 
 export function signedAgentWebhookContract(env={}){
   const allowed=scope(env);
+  const replay=webhookReplayStoreState(env);
   return {
     version:VERSION,
     enabled:enabled(env,'AGENT_WEBHOOK_ENABLED'),
-    phase:'P1_SIGNED_READ_ONLY_PROPOSAL_INTAKE',
+    phase:'P2_SIGNED_READ_ONLY_PROPOSAL_WITH_OPTIONAL_DURABLE_REPLAY',
     authentication:'HMAC_SHA256_SHARED_SECRET',
     secretBinding:'AGENT_WEBHOOK_SHARED_SECRET',
     scopeBindings:['AGENT_WEBHOOK_ALLOWED_AGENTS','AGENT_WEBHOOK_ALLOWED_TENANTS'],
@@ -42,8 +44,11 @@ export function signedAgentWebhookContract(env={}){
     requestedExecution:'dry_run',
     externalSideEffects:false,
     executorBound:false,
-    durableReplayStore:false,
-    replayBoundary:'Timestamp + nonce + deterministic idempotency key are enforced, but P1 does not yet persist used nonces server-side.'
+    durableReplayStore:replay.durable,
+    replayStoreState:replay.state,
+    replayStoreBinding:replay.binding,
+    nonceRetentionSeconds:replay.retentionSeconds,
+    replayBoundary:replay.durable?'Single-use nonce is enforced durably by the D1 replay ledger before gateway evaluation.':'Timestamp + nonce + deterministic idempotency are enforced, but durable nonce consumption is disabled.'
   };
 }
 
@@ -90,6 +95,21 @@ export async function evaluateSignedAgentWebhook(request,env={},nowMs=Date.now()
   if(actionClass!=='read_only')return {ok:false,status:403,code:'AGENT_WEBHOOK_P1_READ_ONLY_REQUIRED'};
   if(String(body?.requestedExecution||'dry_run').trim().toLowerCase()!=='dry_run')return {ok:false,status:403,code:'AGENT_WEBHOOK_P1_EXECUTION_FORBIDDEN'};
 
+  const replayState=webhookReplayStoreState(env);
+  let nonceReceipt=null;
+  if(replayState.enabled){
+    nonceReceipt=await consumeWebhookNonce(env,{tenantId,agentId,runId,nonce,requestTimestamp:timestampRaw,rawBody,nowMs});
+    if(!nonceReceipt.ok){
+      return {
+        ok:false,status:nonceReceipt.status||503,code:nonceReceipt.code,version:VERSION,
+        transport:{authenticated:true,scheme:'HMAC_SHA256',agentId,runId,tenantId,timestamp:Number(timestampRaw),skewSeconds:skew,agentAllowed:true,tenantAllowed:true,signatureExposed:false,secretExposed:false},
+        replayProtection:{durableNonceStore:replayState.durable,replayStoreState:replayState.state,replayDetected:nonceReceipt.code==='AGENT_WEBHOOK_REPLAY_DETECTED',nonceSha256:nonceReceipt.nonceSha256||null,bodySha256:nonceReceipt.bodySha256||null,expiresAt:nonceReceipt.expiresAt||null},
+        externalSideEffects:false,
+        executorBound:false
+      };
+    }
+  }
+
   const evaluation=await evaluateTrustedActionProposal({
     sourceAgent:agentId,
     sourceRunId:runId,
@@ -103,14 +123,23 @@ export async function evaluateSignedAgentWebhook(request,env={},nowMs=Date.now()
     verifierId:'signed-webhook-transport-v1',
     verifierState:'passed',
     evidenceRequirements:['signed_request','transport_headers','proposal_payload','policy_decision'],
-    rollbackPlan:'Read-only P1 adapter performs no external write. Discard the evaluation/evidence receipt if verification fails.',
+    rollbackPlan:'Read-only signed webhook performs no external write. Discard the evaluation/evidence receipt if verification fails.',
     requestedExecution:'dry_run'
   },{externalActionsEnabled:false,executorBindingEnabled:false,executorBound:false});
 
   return {
     ok:true,status:200,code:'AGENT_WEBHOOK_EVALUATED',version:VERSION,
-    transport:{authenticated:true,scheme:'HMAC_SHA256',agentId,runId,tenantId,nonce,timestamp:Number(timestampRaw),skewSeconds:skew,agentAllowed:true,tenantAllowed:true,signatureExposed:false,secretExposed:false},
-    replayProtection:{durableNonceStore:false,idempotencyKey:`webhook:${agentId}:${nonce}`,note:'P1 enforces timestamp freshness and nonce-derived idempotency but does not persist used nonces server-side.'},
+    transport:{authenticated:true,scheme:'HMAC_SHA256',agentId,runId,tenantId,timestamp:Number(timestampRaw),skewSeconds:skew,agentAllowed:true,tenantAllowed:true,signatureExposed:false,secretExposed:false},
+    replayProtection:{
+      durableNonceStore:replayState.durable,
+      replayStoreState:replayState.state,
+      consumed:Boolean(nonceReceipt?.ok),
+      nonceSha256:nonceReceipt?.nonceSha256||null,
+      bodySha256:nonceReceipt?.bodySha256||null,
+      expiresAt:nonceReceipt?.expiresAt||null,
+      idempotencyKey:`webhook:${agentId}:${nonce}`,
+      note:replayState.durable?'Nonce consumed once in durable D1 replay ledger before evaluation.':'Durable replay ledger is disabled; timestamp and nonce-derived idempotency remain transport-only controls.'
+    },
     evaluation,
     externalSideEffects:false,
     executorBound:false

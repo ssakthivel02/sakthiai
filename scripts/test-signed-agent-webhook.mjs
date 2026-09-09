@@ -47,6 +47,7 @@ assert.deepEqual(disabledContract.allowedActionClasses,['read_only']);
 assert.equal(disabledContract.externalSideEffects,false);
 assert.equal(disabledContract.executorBound,false);
 assert.equal(disabledContract.durableReplayStore,false);
+assert.equal(disabledContract.replayStoreState,'DISABLED');
 
 let result=await evaluateSignedAgentWebhook(await req(),{...env,AGENT_WEBHOOK_ENABLED:'false'},NOW);
 assert.equal(result.code,'AGENT_WEBHOOK_DISABLED');
@@ -102,13 +103,13 @@ assert.equal(valid.evaluation.sideEffects,false);
 assert.equal(valid.evaluation.executorContract.id,'sandbox_code');
 assert.equal(valid.evaluation.evidenceHash.length,64);
 assert.equal(valid.replayProtection.durableNonceStore,false);
+assert.equal(valid.replayProtection.replayStoreState,'DISABLED');
 assert.equal(valid.replayProtection.idempotencyKey,`webhook:${AGENT}:nonce_001`);
 const serializedValid=JSON.stringify(valid);
 assert.equal(serializedValid.includes(SECRET),false);
 assert.equal(serializedValid.includes(validSigned.signature),false);
 
-// The same nonce within the freshness window produces the same deterministic evidence record.
-// P1 truthfully reports that it does NOT yet persist used nonces to reject transport replay.
+// P1 compatibility: with durable replay disabled, the same signed read-only request remains re-evaluable.
 const replay=await evaluateSignedAgentWebhook(await req(),env,NOW);
 assert.equal(replay.ok,true);
 assert.equal(replay.replayProtection.durableNonceStore,false);
@@ -131,8 +132,9 @@ let response=await handleAgentApi(new Request(url),env,url,'req_contract');
 assert.equal(response.status,200);
 let routeBody=await response.json();
 assert.equal(routeBody.ok,true);
-assert.equal(routeBody.contract.phase,'P1_SIGNED_READ_ONLY_PROPOSAL_INTAKE');
+assert.equal(routeBody.contract.phase,'P2_SIGNED_READ_ONLY_PROPOSAL_WITH_OPTIONAL_DURABLE_REPLAY');
 assert.equal(routeBody.contract.scopeConfigured,true);
+assert.equal(routeBody.contract.durableReplayStore,false);
 assert.equal(JSON.stringify(routeBody).includes(SECRET),false);
 
 // Route-level valid signed request bypasses human Access-JWT by design but is HMAC + scope authenticated.
@@ -152,14 +154,14 @@ assert.equal(serializedRoute.includes(SECRET),false);
 assert.equal(serializedRoute.includes(routeSigned.signature),false);
 
 console.log(JSON.stringify({
-  marker:'SAKTHIAI_SIGNED_AGENT_WEBHOOK_P1_PASS',
+  marker:'SAKTHIAI_SIGNED_AGENT_WEBHOOK_P1_COMPAT_PASS',
   authentication:'HMAC_SHA256',
   scopeAllowlist:true,
   actionClass:'read_only',
   requestedExecution:'dry_run',
+  durableReplayEnabled:false,
   validExternalHttpProposal:true,
-  durableReplayStore:false,
   externalSideEffects:false,
   executorBound:false,
-  decision:'P1_SIGNED_READ_ONLY_EXTERNAL_PROPOSAL_READY'
+  decision:'P1_COMPATIBILITY_PRESERVED_UNDER_P2'
 },null,2));

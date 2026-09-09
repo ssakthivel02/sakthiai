@@ -5,6 +5,7 @@ conn = sqlite3.connect(':memory:')
 conn.executescript(Path('migrations/0001_foundation.sql').read_text(encoding='utf-8'))
 conn.executescript(Path('migrations/0002_agent_control.sql').read_text(encoding='utf-8'))
 conn.executescript(Path('migrations/0003_executor_control.sql').read_text(encoding='utf-8'))
+conn.executescript(Path('migrations/0004_agent_webhook_replay.sql').read_text(encoding='utf-8'))
 conn.execute('PRAGMA foreign_keys = ON')
 
 tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -12,14 +13,14 @@ required = {
     'schema_meta','tenants','users','memberships','projects','conversations','messages','tasks',
     'task_events','approvals','knowledge_sources','artifacts','usage_ledger','audit_events',
     'task_execution_policy','task_checkpoints','worker_leases','verifier_runs','evidence_records',
-    'execution_attempts','execution_receipts','rollback_records'
+    'execution_attempts','execution_receipts','rollback_records','agent_webhook_nonces'
 }
 missing = required - tables
 if missing:
     raise SystemExit(f'MISSING_TABLES:{sorted(missing)}')
 
 version = conn.execute("SELECT value FROM schema_meta WHERE key='schema_version'").fetchone()
-if not version or version[0] != '3':
+if not version or version[0] != '4':
     raise SystemExit(f'SCHEMA_VERSION_INVALID:{version}')
 
 conn.execute("INSERT INTO tenants(id,slug,name) VALUES('ten_a','a','Tenant A'),('ten_b','b','Tenant B')")
@@ -60,11 +61,14 @@ conn.execute("INSERT INTO evidence_records(id,tenant_id,task_id,verifier_run_id,
 conn.execute("INSERT INTO execution_attempts(id,tenant_id,task_id,executor_contract_id,action_class,idempotency_key,approval_id,verifier_run_id,state,external_action,dry_run,side_effects,rollback_plan_json) VALUES('exe_a','ten_a','tsk_a','repository','repository_write','idem-a','apr_a','ver_a','dry_run_validated',1,1,0,'{\"strategy\":\"restore\"}')")
 conn.execute("INSERT INTO execution_receipts(id,tenant_id,task_id,execution_attempt_id,receipt_type,status,evidence_json) VALUES('rcp_a','ten_a','tsk_a','exe_a','dry_run','validated','{}')")
 conn.execute("INSERT INTO rollback_records(id,tenant_id,task_id,execution_attempt_id,state,strategy) VALUES('rb_a','ten_a','tsk_a','exe_a','planned','Restore pre-action checkpoint')")
+nonce_hash = 'a' * 64
+body_hash = 'b' * 64
+conn.execute("INSERT INTO agent_webhook_nonces(id,tenant_id,agent_id,run_id,nonce_sha256,request_timestamp,body_sha256,expires_at) VALUES(?,?,?,?,?,?,?,?)", ('awn_a','ten_a','agent-a','run-a',nonce_hash,1770000000,body_hash,1770003600))
 conn.commit()
 
-def expect_integrity(sql, code):
+def expect_integrity(sql, code, params=()):
     try:
-        conn.execute(sql)
+        conn.execute(sql, params)
         conn.commit()
         raise SystemExit(code)
     except sqlite3.IntegrityError:
@@ -118,6 +122,20 @@ expect_integrity(
     "INSERT INTO projects(id,tenant_id,owner_user_id,name) VALUES('bad','ten_missing','usr_a','Bad')",
     'FOREIGN_KEY_NOT_ENFORCED'
 )
+expect_integrity(
+    "INSERT INTO agent_webhook_nonces(id,tenant_id,agent_id,run_id,nonce_sha256,request_timestamp,body_sha256,expires_at) VALUES(?,?,?,?,?,?,?,?)",
+    'DUPLICATE_WEBHOOK_NONCE_ALLOWED',
+    ('awn_dup','ten_a','agent-a','run-dup',nonce_hash,1770000001,body_hash,1770003601)
+)
+expect_integrity(
+    "INSERT INTO agent_webhook_nonces(id,tenant_id,agent_id,run_id,nonce_sha256,request_timestamp,body_sha256,expires_at) VALUES(?,?,?,?,?,?,?,?)",
+    'UNKNOWN_TENANT_WEBHOOK_NONCE_ALLOWED',
+    ('awn_bad_tenant','ten_missing','agent-a','run-x','c'*64,1770000001,'d'*64,1770003601)
+)
+
+# The same nonce hash is allowed in a different tenant because replay uniqueness is tenant-scoped.
+conn.execute("INSERT INTO agent_webhook_nonces(id,tenant_id,agent_id,run_id,nonce_sha256,request_timestamp,body_sha256,expires_at) VALUES(?,?,?,?,?,?,?,?)", ('awn_b','ten_b','agent-a','run-b',nonce_hash,1770000002,body_hash,1770003602))
+conn.commit()
 
 still_present = conn.execute("SELECT id FROM tasks WHERE tenant_id='ten_a' AND id='tsk_a'").fetchone()
 if still_present != ('tsk_a',):
@@ -127,14 +145,19 @@ attempt = conn.execute("SELECT state,dry_run,side_effects FROM execution_attempt
 if attempt != ('dry_run_validated',1,0):
     raise SystemExit(f'EXECUTION_ATTEMPT_TRUTH_INVALID:{attempt}')
 
+nonce_row = conn.execute("SELECT tenant_id,agent_id,length(nonce_sha256),length(body_sha256) FROM agent_webhook_nonces WHERE id='awn_a'").fetchone()
+if nonce_row != ('ten_a','agent-a',64,64):
+    raise SystemExit(f'WEBHOOK_NONCE_LEDGER_INVALID:{nonce_row}')
+
 indexes = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
 for name in [
     'idx_projects_tenant_updated','idx_tasks_tenant_state','idx_usage_tenant_created','idx_audit_tenant_created',
     'uq_tasks_tenant_id','idx_execution_policy_tenant','idx_checkpoints_task_sequence','idx_leases_tenant_expires',
     'idx_verifier_task_created','idx_evidence_task_created','uq_approvals_tenant_id','uq_verifier_runs_tenant_id',
-    'uq_execution_attempts_tenant_id','idx_execution_attempts_task_state','idx_execution_receipts_attempt','idx_rollback_attempt_state'
+    'uq_execution_attempts_tenant_id','idx_execution_attempts_task_state','idx_execution_receipts_attempt','idx_rollback_attempt_state',
+    'idx_agent_webhook_nonce_expiry','idx_agent_webhook_nonce_tenant_agent'
 ]:
     if name not in indexes:
         raise SystemExit(f'MISSING_INDEX:{name}')
 
-print('SAKTHIAI_D1_V5_MIGRATION_TEST_PASS')
+print('SAKTHIAI_D1_V6_MIGRATION_REPLAY_TEST_PASS')
