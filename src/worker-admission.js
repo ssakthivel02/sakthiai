@@ -1,4 +1,4 @@
-import baseWorker from './worker.js';
+import baseWorker,{policy as basePolicy} from './worker.js';
 import {authenticateRequest} from './auth.js';
 import {authorizeTenant} from './rbac.js';
 import {enforceQuota,recordUsage} from './quota.js';
@@ -30,6 +30,9 @@ export function admissionHeaders(result){
 export function admissionStatus(env={}){
   const signal=capacitySignal(env);
   return {policy:admissionPolicy(env),signal:{ok:signal.ok,code:signal.code,scope:signal.scope||'worker-isolate',activeRequests:signal.activeRequests??null,hardLimit:signal.hardLimit??null,globallyAuthoritative:false}};
+}
+export function policyWithAdmission(env={}){
+  return {...basePolicy(env),admission:admissionStatus(env)};
 }
 async function readJson(request){
   const type=request.headers.get('content-type')||'';
@@ -86,6 +89,14 @@ export default {
     if(request.method==='GET'&&url.pathname==='/api/v1/admission/status'){
       const id=requestId();const trace=createTraceContext(request,id);
       return finalizeResponse(json({ok:true,admission:admissionStatus(env),requestId:id}),trace,env);
+    }
+    if(request.method==='GET'&&url.pathname==='/api/v1/policy'){
+      const id=requestId();const trace=createTraceContext(request,id);
+      return finalizeResponse(json({ok:true,policy:policyWithAdmission(env),requestId:id}),trace,env);
+    }
+    if(request.method==='GET'&&url.pathname==='/api/v1/status'){
+      const id=requestId();const trace=createTraceContext(request,id);
+      return finalizeResponse(json({ok:true,status:'ok',release:'flagship-hi-tech-v6-preview-observability-foundation',policy:policyWithAdmission(env),requestId:id}),trace,env);
     }
     if(request.method==='POST'&&url.pathname==='/api/v1/chat'){
       const id=requestId();const trace=createTraceContext(request,id);
