@@ -11,12 +11,13 @@
     "test:executor": "node scripts/test-executor-contracts.mjs",
     "test:admission": "node scripts/test-admission-control.mjs",
     "test:capacity": "node scripts/test-capacity-signal.mjs",
+    "test:admitted": "node scripts/test-admitted-execution.mjs",
     "test:preview": "node scripts/test-preview-readiness.mjs",
     "test:ui": "node scripts/test-static-ui.mjs",
     "test:migration": "python3 scripts/test_d1_migration.py",
     "evidence:preview": "node scripts/build-preview-evidence.mjs",
     "build:site": "node scripts/build-static.mjs",
-    "test": "npm run validate && npm run test:auth && npm run test:agent && npm run test:executor && npm run test:admission && npm run test:capacity && npm run test:preview && npm run test:ui && npm run test:migration"
+    "test": "npm run validate && npm run test:auth && npm run test:agent && npm run test:executor && npm run test:admission && npm run test:capacity && npm run test:admitted && npm run test:preview && npm run test:ui && npm run test:migration"
   },
   "engines": {
     "node": ">=20"
