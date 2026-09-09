@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/signed-agent-webhook.js'
+      - 'src/webhook-replay-store.js'
       - 'src/agent-api.js'
       - 'src/trusted-action-gateway.js'
       - 'scripts/test-signed-agent-webhook.mjs'
@@ -33,10 +34,11 @@ jobs:
       - name: Syntax checks
         run: |
           node --check src/signed-agent-webhook.js
+          node --check src/webhook-replay-store.js
           node --check src/agent-api.js
           node --check scripts/test-signed-agent-webhook.mjs
 
-      - name: Signed webhook security harness
+      - name: Signed webhook P1 compatibility harness
         run: npm run test:webhook
 
       - name: Full SakthiAI regression suite
@@ -49,6 +51,7 @@ jobs:
           grep -Fq '"AGENT_WEBHOOK_ENABLED": "false"' wrangler.jsonc
           grep -Fq '"AGENT_WEBHOOK_ALLOWED_AGENTS": ""' wrangler.jsonc
           grep -Fq '"AGENT_WEBHOOK_ALLOWED_TENANTS": ""' wrangler.jsonc
+          grep -Fq '"AGENT_WEBHOOK_DURABLE_REPLAY_ENABLED": "false"' wrangler.jsonc
           if grep -Fq 'AGENT_WEBHOOK_SHARED_SECRET' wrangler.jsonc; then
             echo 'Shared secret must not be committed in wrangler.jsonc' >&2
             exit 1
@@ -65,21 +68,21 @@ jobs:
           grep -Fq "requestedExecution:'dry_run'" src/signed-agent-webhook.js
           grep -Fq 'externalSideEffects:false' src/signed-agent-webhook.js
           grep -Fq 'executorBound:false' src/signed-agent-webhook.js
-          grep -Fq 'durableNonceStore:false' src/signed-agent-webhook.js
-          echo 'SAKTHIAI_SIGNED_WEBHOOK_EVIDENCE_BOUNDARY_PASS'
+          grep -Fq 'replayStoreState' src/signed-agent-webhook.js
+          echo 'SAKTHIAI_SIGNED_WEBHOOK_P1_COMPAT_BOUNDARY_PASS'
 
       - name: QA summary
         if: always()
         run: |
-          echo '### SakthiAI Signed Agent Webhook — P1 QA' >> "$GITHUB_STEP_SUMMARY"
+          echo '### SakthiAI Signed Agent Webhook — P1 compatibility QA' >> "$GITHUB_STEP_SUMMARY"
           echo '- HMAC-SHA-256 transport verification checked' >> "$GITHUB_STEP_SUMMARY"
           echo '- agent + tenant allowlists checked' >> "$GITHUB_STEP_SUMMARY"
           echo '- five-minute freshness boundary checked' >> "$GITHUB_STEP_SUMMARY"
           echo '- tamper detection checked' >> "$GITHUB_STEP_SUMMARY"
           echo '- read-only and dry-run restrictions checked' >> "$GITHUB_STEP_SUMMARY"
-          echo '- default-disabled configuration checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- webhook remains default-disabled' >> "$GITHUB_STEP_SUMMARY"
+          echo '- durable replay remains default-disabled' >> "$GITHUB_STEP_SUMMARY"
           echo '- repository contains no webhook shared secret' >> "$GITHUB_STEP_SUMMARY"
           echo '- full SakthiAI regression suite checked' >> "$GITHUB_STEP_SUMMARY"
-          echo '- durable consumed-nonce replay protection is NOT claimed' >> "$GITHUB_STEP_SUMMARY"
           echo '- external side effects remain disabled' >> "$GITHUB_STEP_SUMMARY"
-          echo '- P1 funding-readiness integration proof; not production readiness' >> "$GITHUB_STEP_SUMMARY"
+          echo '- P1 compatibility is preserved while P2 is optional' >> "$GITHUB_STEP_SUMMARY"
