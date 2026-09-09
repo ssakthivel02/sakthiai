@@ -1,0 +1,68 @@
+name: SakthiAI P3 Nonprod Preflight QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/lib/p3-nonprod-preflight.mjs'
+      - 'scripts/p3-nonprod-preflight.mjs'
+      - 'scripts/test-p3-nonprod-preflight.mjs'
+      - 'docs/funding-readiness/real-client-evidence-p3.md'
+      - 'package.json'
+      - '.github/workflows/p3-nonprod-preflight-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p3-preflight-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v5
+
+      - name: Use Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Syntax and preflight tests
+        run: |
+          node --check scripts/lib/p3-nonprod-preflight.mjs
+          node --check scripts/p3-nonprod-preflight.mjs
+          npm run test:p3-preflight
+
+      - name: Guardrail source checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "NON_PRODUCTION_ONLY" scripts/lib/p3-nonprod-preflight.mjs
+          grep -Fq "P3_PRODUCTION_ENVIRONMENT_FORBIDDEN" scripts/lib/p3-nonprod-preflight.mjs
+          grep -Fq "P3_HTTPS_REQUIRED" scripts/lib/p3-nonprod-preflight.mjs
+          grep -Fq "P3_LOCALHOST_NOT_REAL_EVIDENCE" scripts/lib/p3-nonprod-preflight.mjs
+          grep -Fq "durableReplayStore" scripts/lib/p3-nonprod-preflight.mjs
+          grep -Fq "replayStoreState==='AVAILABLE'" scripts/lib/p3-nonprod-preflight.mjs
+          grep -Fq "externalSideEffects===false" scripts/lib/p3-nonprod-preflight.mjs
+          grep -Fq "executorBound===false" scripts/lib/p3-nonprod-preflight.mjs
+          grep -Fq '20+ real external-client runs completed: **NO' docs/funding-readiness/real-client-evidence-p3.md
+          echo 'SAKTHIAI_P3_NONPROD_GUARDRAILS_PASS'
+
+      - name: Full SakthiAI regression suite
+        run: npm test
+
+      - name: QA summary
+        if: always()
+        run: |
+          echo '### SakthiAI P3 Non-Production Preflight QA' >> "$GITHUB_STEP_SUMMARY"
+          echo '- explicit NON_PRODUCTION_ONLY acknowledgement required' >> "$GITHUB_STEP_SUMMARY"
+          echo '- prod/production/live environment labels blocked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- non-local HTTPS required' >> "$GITHUB_STEP_SUMMARY"
+          echo '- runtime secret presence required but never printed' >> "$GITHUB_STEP_SUMMARY"
+          echo '- webhook enabled + scope configured required' >> "$GITHUB_STEP_SUMMARY"
+          echo '- durable replay AVAILABLE required' >> "$GITHUB_STEP_SUMMARY"
+          echo '- read-only/dry-run only required' >> "$GITHUB_STEP_SUMMARY"
+          echo '- executor must remain unbound' >> "$GITHUB_STEP_SUMMARY"
+          echo '- external side effects must remain false' >> "$GITHUB_STEP_SUMMARY"
+          echo '- full regression suite checked' >> "$GITHUB_STEP_SUMMARY"
