@@ -5,6 +5,7 @@ const MAX_BODY_BYTES=65536;
 
 function enabled(env,name){return String(env?.[name]||'').toLowerCase()==='true';}
 function text(value,max){const out=String(value??'').trim();return out&&out.length<=max?out:null;}
+function list(value,maxItems=100){return String(value||'').split(',').map(x=>x.trim()).filter(Boolean).slice(0,maxItems);}
 function hex(bytes){return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 function constantTimeEqualHex(a,b){
   const aa=String(a||'').toLowerCase(),bb=String(b||'').toLowerCase();
@@ -19,14 +20,20 @@ function signatureBase({timestamp,agentId,runId,tenantId,nonce,body}){
   return `${timestamp}\n${agentId}\n${runId}\n${tenantId}\n${nonce}\n${body}`;
 }
 function maxSkewSeconds(env){const n=Number(env?.AGENT_WEBHOOK_MAX_SKEW_SECONDS||300);return Number.isFinite(n)&&n>=30&&n<=900?Math.floor(n):300;}
+function scope(env){return {agents:list(env?.AGENT_WEBHOOK_ALLOWED_AGENTS),tenants:list(env?.AGENT_WEBHOOK_ALLOWED_TENANTS)};}
 
 export function signedAgentWebhookContract(env={}){
+  const allowed=scope(env);
   return {
     version:VERSION,
     enabled:enabled(env,'AGENT_WEBHOOK_ENABLED'),
     phase:'P1_SIGNED_READ_ONLY_PROPOSAL_INTAKE',
     authentication:'HMAC_SHA256_SHARED_SECRET',
     secretBinding:'AGENT_WEBHOOK_SHARED_SECRET',
+    scopeBindings:['AGENT_WEBHOOK_ALLOWED_AGENTS','AGENT_WEBHOOK_ALLOWED_TENANTS'],
+    scopeConfigured:allowed.agents.length>0&&allowed.tenants.length>0,
+    allowedAgentCount:allowed.agents.length,
+    allowedTenantCount:allowed.tenants.length,
     requiredHeaders:['x-sakthiai-agent-id','x-sakthiai-agent-run-id','x-sakthiai-tenant','x-sakthiai-timestamp','x-sakthiai-nonce','x-sakthiai-signature'],
     signatureFormat:'v1=<hex-hmac-sha256>',
     signatureInput:'timestamp\\nagentId\\nrunId\\ntenantId\\nnonce\\nrawBody',
@@ -49,6 +56,8 @@ export async function evaluateSignedAgentWebhook(request,env={},nowMs=Date.now()
   if(!enabled(env,'AGENT_WEBHOOK_ENABLED'))return {ok:false,status:503,code:'AGENT_WEBHOOK_DISABLED'};
   const secret=text(env.AGENT_WEBHOOK_SHARED_SECRET,4096);
   if(!secret||secret.length<32)return {ok:false,status:503,code:'AGENT_WEBHOOK_SECRET_MISSING_OR_WEAK'};
+  const allowed=scope(env);
+  if(!allowed.agents.length||!allowed.tenants.length)return {ok:false,status:503,code:'AGENT_WEBHOOK_SCOPE_NOT_CONFIGURED'};
   const type=request.headers.get('content-type')||'';
   if(!type.includes('application/json'))return {ok:false,status:400,code:'CONTENT_TYPE_REQUIRED'};
   const length=Number(request.headers.get('content-length')||0);
@@ -61,6 +70,8 @@ export async function evaluateSignedAgentWebhook(request,env={},nowMs=Date.now()
   const nonce=text(request.headers.get('x-sakthiai-nonce'),160);
   const signature=text(request.headers.get('x-sakthiai-signature'),80);
   if(!agentId||!runId||!tenantId||!timestampRaw||!nonce||!signature)return {ok:false,status:401,code:'AGENT_WEBHOOK_HEADERS_REQUIRED'};
+  if(!allowed.agents.includes(agentId))return {ok:false,status:403,code:'AGENT_WEBHOOK_AGENT_NOT_ALLOWED'};
+  if(!allowed.tenants.includes(tenantId))return {ok:false,status:403,code:'AGENT_WEBHOOK_TENANT_NOT_ALLOWED'};
   if(!/^v1=[0-9a-fA-F]{64}$/.test(signature))return {ok:false,status:401,code:'AGENT_WEBHOOK_SIGNATURE_FORMAT_INVALID'};
   const timestamp=Number(timestampRaw);
   if(!Number.isFinite(timestamp)||timestamp<=0)return {ok:false,status:401,code:'AGENT_WEBHOOK_TIMESTAMP_INVALID'};
@@ -98,7 +109,7 @@ export async function evaluateSignedAgentWebhook(request,env={},nowMs=Date.now()
 
   return {
     ok:true,status:200,code:'AGENT_WEBHOOK_EVALUATED',version:VERSION,
-    transport:{authenticated:true,scheme:'HMAC_SHA256',agentId,runId,tenantId,nonce,timestamp:Number(timestampRaw),skewSeconds:skew,signatureExposed:false,secretExposed:false},
+    transport:{authenticated:true,scheme:'HMAC_SHA256',agentId,runId,tenantId,nonce,timestamp:Number(timestampRaw),skewSeconds:skew,agentAllowed:true,tenantAllowed:true,signatureExposed:false,secretExposed:false},
     replayProtection:{durableNonceStore:false,idempotencyKey:`webhook:${agentId}:${nonce}`,note:'P1 enforces timestamp freshness and nonce-derived idempotency but does not persist used nonces server-side.'},
     evaluation,
     externalSideEffects:false,
