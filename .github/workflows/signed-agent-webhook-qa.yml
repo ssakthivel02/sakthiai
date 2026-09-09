@@ -1,0 +1,85 @@
+name: SakthiAI Signed Agent Webhook QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/signed-agent-webhook.js'
+      - 'src/agent-api.js'
+      - 'src/trusted-action-gateway.js'
+      - 'scripts/test-signed-agent-webhook.mjs'
+      - 'package.json'
+      - 'wrangler.jsonc'
+      - 'docs/funding-readiness/signed-agent-webhook-p1.md'
+      - '.github/workflows/signed-agent-webhook-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-webhook-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v5
+
+      - name: Use Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Syntax checks
+        run: |
+          node --check src/signed-agent-webhook.js
+          node --check src/agent-api.js
+          node --check scripts/test-signed-agent-webhook.mjs
+
+      - name: Signed webhook security harness
+        run: npm run test:webhook
+
+      - name: Full SakthiAI regression suite
+        run: npm test
+
+      - name: Configuration fail-closed boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '"AGENT_WEBHOOK_ENABLED": "false"' wrangler.jsonc
+          grep -Fq '"AGENT_WEBHOOK_ALLOWED_AGENTS": ""' wrangler.jsonc
+          grep -Fq '"AGENT_WEBHOOK_ALLOWED_TENANTS": ""' wrangler.jsonc
+          if grep -Fq 'AGENT_WEBHOOK_SHARED_SECRET' wrangler.jsonc; then
+            echo 'Shared secret must not be committed in wrangler.jsonc' >&2
+            exit 1
+          fi
+          echo 'SAKTHIAI_SIGNED_WEBHOOK_CONFIG_FAIL_CLOSED_PASS'
+
+      - name: Evidence-boundary checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'External side effects: **NO**' docs/funding-readiness/signed-agent-webhook-p1.md
+          grep -Fq 'Durable nonce replay store: **NO**' docs/funding-readiness/signed-agent-webhook-p1.md
+          grep -Fq "allowedActionClasses:['read_only']" src/signed-agent-webhook.js
+          grep -Fq "requestedExecution:'dry_run'" src/signed-agent-webhook.js
+          grep -Fq 'externalSideEffects:false' src/signed-agent-webhook.js
+          grep -Fq 'executorBound:false' src/signed-agent-webhook.js
+          grep -Fq 'durableNonceStore:false' src/signed-agent-webhook.js
+          echo 'SAKTHIAI_SIGNED_WEBHOOK_EVIDENCE_BOUNDARY_PASS'
+
+      - name: QA summary
+        if: always()
+        run: |
+          echo '### SakthiAI Signed Agent Webhook — P1 QA' >> "$GITHUB_STEP_SUMMARY"
+          echo '- HMAC-SHA-256 transport verification checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- agent + tenant allowlists checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- five-minute freshness boundary checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- tamper detection checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- read-only and dry-run restrictions checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- default-disabled configuration checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- repository contains no webhook shared secret' >> "$GITHUB_STEP_SUMMARY"
+          echo '- full SakthiAI regression suite checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- durable consumed-nonce replay protection is NOT claimed' >> "$GITHUB_STEP_SUMMARY"
+          echo '- external side effects remain disabled' >> "$GITHUB_STEP_SUMMARY"
+          echo '- P1 funding-readiness integration proof; not production readiness' >> "$GITHUB_STEP_SUMMARY"
