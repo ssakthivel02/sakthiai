@@ -5,3 +5,5 @@ node_modules/
 .env
 .env.*
 !.env.example
+wrangler.p3-evidence.generated.jsonc
+evidence/funding-readiness/signed-webhook-p3-real-client.json
