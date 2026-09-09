@@ -1,0 +1,47 @@
+name: Protected Main Gate
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  protected-main-gate:
+    name: protected-main-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout full candidate
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Reject whitespace/conflict defects
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check "${{ github.event.pull_request.base.sha || 'HEAD^' }}" HEAD
+          if git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- ':!*.md'; then
+            echo 'Unresolved merge-conflict marker found.' >&2
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run full SakthiAI regression suite
+        run: npm test
+
+      - name: Governance summary
+        if: always()
+        run: |
+          echo '### Protected Main Gate' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Always runs for every pull request targeting main' >> "$GITHUB_STEP_SUMMARY"
+          echo '- git diff whitespace/conflict check' >> "$GITHUB_STEP_SUMMARY"
+          echo '- full npm test regression suite' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Feature-specific gateway/webhook/replay/client checks remain additive' >> "$GITHUB_STEP_SUMMARY"
