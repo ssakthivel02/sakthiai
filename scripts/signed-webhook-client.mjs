@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import {sendSignedExternalProposal,sanitizedClientConfig} from './lib/signed-webhook-client.mjs';
 
 function arg(name,fallback=null){const i=process.argv.indexOf(`--${name}`);return i>=0&&i+1<process.argv.length?process.argv[i+1]:fallback;}
@@ -37,6 +38,6 @@ const report={
 };
 const serialized=JSON.stringify(report,null,2)+'\n';
 if(serialized.includes(secret))fail('CLIENT_SECRET_LEAK_GUARD','Refusing to emit output because the configured secret appeared in the serialized report.');
-if(output){await fs.mkdir(new URL('.',`file://${process.cwd()}/${output}`).pathname,{recursive:true}).catch(()=>{});await fs.writeFile(output,serialized,'utf8');}
+if(output){await fs.mkdir(path.dirname(output),{recursive:true});await fs.writeFile(output,serialized,'utf8');}
 process.stdout.write(serialized);
 if(!result.ok)process.exitCode=1;
