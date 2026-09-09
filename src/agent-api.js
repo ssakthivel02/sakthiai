@@ -5,10 +5,12 @@ import {taskStateContract} from './agent-state.js';
 import {agentControlState,createAgentTask,getAgentTask,transitionAgentTask,createCheckpoint,requestApproval,decideApproval} from './agent-control.js';
 import {getLatestCheckpoint} from './agent-leases.js';
 import {listApprovalQueue,listTaskEvents,listVerifierRuns} from './agent-queries.js';
+import {trustedActionGatewayContract,evaluateTrustedActionProposal} from './trusted-action-gateway.js';
 
 const HEADERS={"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer"};
 function json(body,status=200,extra={}){return new Response(JSON.stringify(body),{status,headers:{...HEADERS,...extra}});}
 function tenantSelector(request){return String(request.headers.get('x-sakthiai-tenant')||'').trim();}
+function enabled(env,name){return String(env[name]||'').toLowerCase()==='true';}
 async function readJson(request){
   const type=request.headers.get('content-type')||'';
   if(!type.includes('application/json'))throw new Error('CONTENT_TYPE_REQUIRED');
@@ -56,6 +58,17 @@ export async function handleAgentApi(request,env,url,id){
   const path=url.pathname;
   if(request.method==='GET'&&path==='/api/v1/agents/control/status')return json({ok:true,control:agentControlState(env),externalExecutionImplemented:false,publicVerifierWrites:false,requestId:id});
   if(request.method==='GET'&&path==='/api/v1/agents/state-contract')return json({ok:true,contract:taskStateContract(),requestId:id});
+  if(request.method==='GET'&&path==='/api/v1/agents/trusted-actions/contract')return json({ok:true,contract:trustedActionGatewayContract(),requestId:id});
+
+  if(request.method==='POST'&&path==='/api/v1/agents/trusted-actions/evaluate')return secured(request,env,id,'agents_write',async access=>{
+    const body=await readJson(request);
+    const evaluation=await evaluateTrustedActionProposal({...body,tenantId:access.tenantId},{
+      externalActionsEnabled:enabled(env,'AGENT_EXTERNAL_ACTIONS_ENABLED'),
+      executorBindingEnabled:enabled(env,'AGENT_EXECUTOR_BINDINGS_ENABLED'),
+      executorBound:false
+    });
+    return {evaluation,execution:'POLICY_AND_DRY_RUN_ONLY',liveExternalAgentBinding:false,externalSideEffects:false};
+  });
 
   if(request.method==='POST'&&path==='/api/v1/agents/tasks')return secured(request,env,id,'agents_write',async access=>{
     const body=await readJson(request);
