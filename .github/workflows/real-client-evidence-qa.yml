@@ -1,0 +1,180 @@
+name: SakthiAI Real Client Evidence Kit QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/lib/signed-webhook-client.mjs'
+      - 'scripts/signed-webhook-client.mjs'
+      - 'scripts/run-real-client-benchmark.mjs'
+      - 'scripts/test-real-client-kit.mjs'
+      - 'scripts/test-helpers/signed-webhook-fixture-server.mjs'
+      - 'scripts/test-helpers/fake-webhook-replay-db.mjs'
+      - 'docs/funding-readiness/real-client-evidence-p3.md'
+      - 'package.json'
+      - '.github/workflows/real-client-evidence-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FIXTURE_SECRET: fixture-only-shared-secret-0123456789abcdef
+  FIXTURE_AGENT: fixture-client-agent
+  FIXTURE_TENANT: fixture-client-tenant
+  FIXTURE_ENDPOINT: http://127.0.0.1:8877/api/v1/agents/external-proposals/evaluate
+
+jobs:
+  client-kit-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v5
+
+      - name: Use Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Syntax and construction tests
+        run: |
+          node --check scripts/lib/signed-webhook-client.mjs
+          node --check scripts/signed-webhook-client.mjs
+          node --check scripts/run-real-client-benchmark.mjs
+          node --check scripts/test-helpers/signed-webhook-fixture-server.mjs
+          npm run test:client
+
+      - name: Start isolated local fixture server
+        shell: bash
+        run: |
+          set -euo pipefail
+          SAKTHIAI_FIXTURE_SECRET="$FIXTURE_SECRET" \
+          SAKTHIAI_FIXTURE_AGENT="$FIXTURE_AGENT" \
+          SAKTHIAI_FIXTURE_TENANT="$FIXTURE_TENANT" \
+          node scripts/test-helpers/signed-webhook-fixture-server.mjs >/tmp/sakthiai-p3-fixture.log 2>&1 &
+          echo $! >/tmp/sakthiai-p3-fixture.pid
+          ready=0
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8877/health >/tmp/sakthiai-p3-health.json; then ready=1; break; fi
+            sleep 0.25
+          done
+          if [ "$ready" != 1 ]; then cat /tmp/sakthiai-p3-fixture.log; exit 1; fi
+          cat /tmp/sakthiai-p3-health.json
+
+      - name: Exact single-run CLI over HTTP socket
+        shell: bash
+        env:
+          SAKTHIAI_WEBHOOK_ENDPOINT: ${{ env.FIXTURE_ENDPOINT }}
+          SAKTHIAI_WEBHOOK_SECRET: ${{ env.FIXTURE_SECRET }}
+          SAKTHIAI_WEBHOOK_AGENT_ID: ${{ env.FIXTURE_AGENT }}
+          SAKTHIAI_WEBHOOK_TENANT_ID: ${{ env.FIXTURE_TENANT }}
+        run: |
+          set -euo pipefail
+          npm run client:webhook -- \
+            --allow-localhost \
+            --task-id p3_ci_single \
+            --action 'Read-only socket integration check.' \
+            --rationale 'P3 CI external-process client proof; no side effect.' \
+            --target-system fixture \
+            --target-resource socket \
+            --output evidence/funding-readiness/p3-ci-single.json \
+            >/tmp/p3-single.stdout
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          const d=JSON.parse(fs.readFileSync('evidence/funding-readiness/p3-ci-single.json','utf8'));
+          assert.equal(d.outcome.ok,true);
+          assert.equal(d.outcome.status,200);
+          assert.equal(d.outcome.code,'AGENT_WEBHOOK_EVALUATED');
+          assert.equal(d.outcome.response.evaluation.decision,'DRY_RUN_READY');
+          assert.equal(d.outcome.response.externalSideEffects,false);
+          assert.equal(d.proposal.actionClass,'read_only');
+          assert.equal(d.proposal.requestedExecution,'dry_run');
+          assert.equal(d.evidenceBoundary.productionReadyClaim,false);
+          console.log('SAKTHIAI_P3_SINGLE_CLIENT_SOCKET_PASS');
+          NODE
+          if grep -Fq "$FIXTURE_SECRET" evidence/funding-readiness/p3-ci-single.json /tmp/p3-single.stdout; then echo 'secret leaked' >&2; exit 1; fi
+
+      - name: Exact 20-run client benchmark over HTTP socket
+        shell: bash
+        env:
+          SAKTHIAI_WEBHOOK_ENDPOINT: ${{ env.FIXTURE_ENDPOINT }}
+          SAKTHIAI_WEBHOOK_SECRET: ${{ env.FIXTURE_SECRET }}
+          SAKTHIAI_WEBHOOK_AGENT_ID: ${{ env.FIXTURE_AGENT }}
+          SAKTHIAI_WEBHOOK_TENANT_ID: ${{ env.FIXTURE_TENANT }}
+        run: |
+          set -euo pipefail
+          npm run benchmark:real-client -- \
+            --allow-localhost \
+            --trials 20 \
+            --check-replay \
+            --target-system fixture \
+            --target-resource p3-socket-benchmark \
+            --output evidence/funding-readiness/p3-ci-local-client-benchmark.json \
+            >/tmp/p3-benchmark.stdout
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import assert from 'node:assert/strict';
+          const d=JSON.parse(fs.readFileSync('evidence/funding-readiness/p3-ci-local-client-benchmark.json','utf8'));
+          assert.equal(d.evidenceMode,'LOCAL_HTTP_TEST_CLIENT');
+          assert.equal(d.trials,20);
+          assert.equal(d.accepted,20);
+          assert.equal(d.failed,0);
+          assert.equal(d.checkReplay,true);
+          assert.equal(d.replayAttempts,20);
+          assert.equal(d.replayRejected,20);
+          assert.equal(d.uniqueEvidenceHashes,20);
+          assert.equal(d.claimGate.qualifiesAsRealExternalClientEvidence,false);
+          assert.equal(d.claimGate.qualifiesAsDurableReplayEvidence,false);
+          assert.equal(d.claimGate.vendorSpecificAgentClaim,false);
+          assert.equal(d.externalSideEffectsExpected,false);
+          assert.equal(d.executorBoundExpected,false);
+          assert.equal(d.productionReadyClaim,false);
+          console.log('SAKTHIAI_P3_20_RUN_SOCKET_BENCHMARK_PASS');
+          NODE
+          if grep -Fq "$FIXTURE_SECRET" evidence/funding-readiness/p3-ci-local-client-benchmark.json /tmp/p3-benchmark.stdout; then echo 'secret leaked' >&2; exit 1; fi
+
+      - name: Full SakthiAI regression suite
+        run: npm test
+
+      - name: Evidence boundary checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Production ready: **NO**' docs/funding-readiness/real-client-evidence-p3.md
+          grep -Fq '20+ real external-client runs completed: **NO' docs/funding-readiness/real-client-evidence-p3.md
+          grep -Fq "actionClass:'read_only'" scripts/lib/signed-webhook-client.mjs
+          grep -Fq "requestedExecution:'dry_run'" scripts/lib/signed-webhook-client.mjs
+          grep -Fq "vendorSpecificAgentClaim:false" scripts/run-real-client-benchmark.mjs
+          grep -Fq "LOCAL_HTTP_TEST_CLIENT" scripts/run-real-client-benchmark.mjs
+          echo 'SAKTHIAI_P3_CLIENT_EVIDENCE_BOUNDARY_PASS'
+
+      - name: Upload local integration evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sakthiai-p3-local-client-integration-evidence
+          path: |
+            evidence/funding-readiness/p3-ci-single.json
+            evidence/funding-readiness/p3-ci-local-client-benchmark.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Stop fixture server
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/sakthiai-p3-fixture.pid ]; then kill "$(cat /tmp/sakthiai-p3-fixture.pid)" 2>/dev/null || true; fi
+          cat /tmp/sakthiai-p3-fixture.log 2>/dev/null || true
+
+      - name: QA summary
+        if: always()
+        run: |
+          echo '### SakthiAI P3 Real Client Evidence Kit QA' >> "$GITHUB_STEP_SUMMARY"
+          echo '- exact CLI exercised through separate HTTP server process' >> "$GITHUB_STEP_SUMMARY"
+          echo '- 20 unique local HTTP proposals accepted' >> "$GITHUB_STEP_SUMMARY"
+          echo '- 20 immediate replays rejected' >> "$GITHUB_STEP_SUMMARY"
+          echo '- secret non-disclosure checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- localhost evidence is explicitly prevented from qualifying as real external-client evidence' >> "$GITHUB_STEP_SUMMARY"
+          echo '- external side effects remain disabled' >> "$GITHUB_STEP_SUMMARY"
+          echo '- genuine P3 claim still requires non-production HTTPS + D1 run' >> "$GITHUB_STEP_SUMMARY"
