@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sakthiai-flagship-api",
-  "main": "src/worker.js",
+  "main": "src/worker-admission.js",
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
@@ -17,6 +17,9 @@
     "QUOTA_WINDOW_SECONDS": "60",
     "QUOTA_REQUESTS_PER_WINDOW": "30",
     "QUOTA_DAILY_AI_REQUESTS": "100",
+    "ADMISSION_CONTROL_ENABLED": "false",
+    "ADMISSION_GLOBAL_CONCURRENCY_LIMIT": "32",
+    "ADMISSION_DEGRADE_AT_PERCENT": "75",
     "RESEARCH_RUNTIME_ENABLED": "false",
     "CODE_RUNTIME_ENABLED": "false",
     "AGENT_RUNTIME_ENABLED": "false",
