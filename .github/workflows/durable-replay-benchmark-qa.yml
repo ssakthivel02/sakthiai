@@ -1,0 +1,126 @@
+name: SakthiAI Durable Replay + Benchmark QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/signed-agent-webhook.js'
+      - 'src/webhook-replay-store.js'
+      - 'migrations/0004_agent_webhook_replay.sql'
+      - 'scripts/test-webhook-replay.mjs'
+      - 'scripts/test-helpers/fake-webhook-replay-db.mjs'
+      - 'scripts/build-signed-webhook-benchmark.mjs'
+      - 'scripts/test_d1_migration.py'
+      - 'package.json'
+      - 'wrangler.jsonc'
+      - 'docs/funding-readiness/durable-replay-benchmark-p2.md'
+      - '.github/workflows/durable-replay-benchmark-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replay-benchmark-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v5
+
+      - name: Use Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Syntax checks
+        run: |
+          node --check src/webhook-replay-store.js
+          node --check src/signed-agent-webhook.js
+          node --check scripts/test-webhook-replay.mjs
+          node --check scripts/build-signed-webhook-benchmark.mjs
+
+      - name: Durable replay runtime harness
+        run: npm run test:replay
+
+      - name: Schema v4 replay migration test
+        run: npm run test:migration
+
+      - name: Build 30-trial benchmark evidence
+        run: npm run benchmark:webhook
+
+      - name: Validate benchmark artifact
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          const path='evidence/funding-readiness/signed-webhook-p2-benchmark.json';
+          const data=JSON.parse(fs.readFileSync(path,'utf8'));
+          assert.equal(data.benchmarkMode,'CI_DETERMINISTIC_TRANSPORT');
+          assert.equal(data.realExternalAgentRuns,false);
+          assert.equal(data.trials,30);
+          assert.equal(data.uniqueAccepted,30);
+          assert.equal(data.replayAttempts,30);
+          assert.equal(data.replayRejected,30);
+          assert.equal(data.acceptanceRate,1);
+          assert.equal(data.replayRejectionRate,1);
+          assert.equal(data.externalSideEffects,false);
+          assert.equal(data.executorBound,false);
+          assert.equal(data.productionReady,false);
+          assert.equal(data.runs.length,30);
+          assert.equal(new Set(data.runs.map(x=>x.evidenceHash)).size,30);
+          console.log('SAKTHIAI_P2_BENCHMARK_ARTIFACT_PASS');
+          NODE
+
+      - name: Full SakthiAI regression suite
+        run: npm test
+
+      - name: Fail-closed configuration boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '"AGENT_WEBHOOK_ENABLED": "false"' wrangler.jsonc
+          grep -Fq '"AGENT_WEBHOOK_DURABLE_REPLAY_ENABLED": "false"' wrangler.jsonc
+          grep -Fq '"AGENT_WEBHOOK_NONCE_RETENTION_SECONDS": "3600"' wrangler.jsonc
+          if grep -Fq 'AGENT_WEBHOOK_SHARED_SECRET' wrangler.jsonc; then
+            echo 'Shared secret must not be committed in wrangler.jsonc' >&2
+            exit 1
+          fi
+          echo 'SAKTHIAI_P2_REPLAY_CONFIG_FAIL_CLOSED_PASS'
+
+      - name: Evidence boundary checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Production ready: **NO**' docs/funding-readiness/durable-replay-benchmark-p2.md
+          grep -Fq 'External write execution: **NO**' docs/funding-readiness/durable-replay-benchmark-p2.md
+          grep -Fq 'Real external-agent benchmark runs: **NO**' docs/funding-readiness/durable-replay-benchmark-p2.md
+          grep -Fq 'INSERT OR IGNORE INTO agent_webhook_nonces' src/webhook-replay-store.js
+          grep -Fq 'AGENT_WEBHOOK_REPLAY_DETECTED' src/webhook-replay-store.js
+          grep -Fq 'externalSideEffects:false' src/signed-agent-webhook.js
+          grep -Fq 'executorBound:false' src/signed-agent-webhook.js
+          echo 'SAKTHIAI_P2_EVIDENCE_BOUNDARY_PASS'
+
+      - name: Upload benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sakthiai-p2-signed-webhook-benchmark
+          path: evidence/funding-readiness/signed-webhook-p2-benchmark.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: QA summary
+        if: always()
+        run: |
+          echo '### SakthiAI Durable Replay + Benchmark — P2 QA' >> "$GITHUB_STEP_SUMMARY"
+          echo '- schema v4 replay ledger checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- atomic single-use nonce contract checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- missing DB binding fails closed when replay is enabled' >> "$GITHUB_STEP_SUMMARY"
+          echo '- invalid/write/execute proposals do not consume nonce' >> "$GITHUB_STEP_SUMMARY"
+          echo '- 30 unique signed proposals required to pass' >> "$GITHUB_STEP_SUMMARY"
+          echo '- 30 immediate replay attempts required to be rejected' >> "$GITHUB_STEP_SUMMARY"
+          echo '- benchmark artifact uploaded for evidence review' >> "$GITHUB_STEP_SUMMARY"
+          echo '- benchmark is deterministic CI transport evidence, NOT real external-agent evidence' >> "$GITHUB_STEP_SUMMARY"
+          echo '- no external side effects or executor binding enabled' >> "$GITHUB_STEP_SUMMARY"
+          echo '- production readiness remains NO' >> "$GITHUB_STEP_SUMMARY"
