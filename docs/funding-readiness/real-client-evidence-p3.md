@@ -1,6 +1,6 @@
 # SakthiAI Real External-Client Evidence Kit — P3
 
-Status: **CLIENT KIT READY FOR NON-PRODUCTION EVIDENCE RUN**  
+Status: **CLIENT KIT READY; NON-PRODUCTION PREFLIGHT REQUIRED BEFORE REAL EVIDENCE RUN**  
 Production ready: **NO**  
 External write execution: **NO**  
 Repository executor bound: **NO**  
@@ -11,31 +11,55 @@ Live vendor-specific agent adapter: **NO**
 
 P0 proved provider-neutral policy evaluation.  
 P1 added signed machine-to-machine HTTP proposal intake.  
-P2 added optional durable single-use nonce replay protection and a 30-trial deterministic CI benchmark.
+P2 added optional durable single-use nonce replay protection and a 30-trial deterministic CI benchmark.  
+P3 adds the external-client tooling required to collect genuine non-production HTTPS evidence without enabling any write executor.
 
-P3 adds the client-side tooling required to collect the next class of evidence from a **real non-production HTTPS endpoint** without enabling any write executor.
+## Mandatory non-production preflight
 
-The tooling is intentionally usable from a separate machine/process so the evidence can prove that SakthiAI receives signed external HTTP proposals rather than only in-process fixtures.
+Before any real P3 evidence run, execute:
 
-## New tooling
-
-### Single-run client
-
-`scripts/signed-webhook-client.mjs`
+`npm run preflight:p3`
 
 Required environment variables:
 
 ```text
-SAKTHIAI_WEBHOOK_SECRET=<runtime secret; never pass on command line>
+SAKTHIAI_EVIDENCE_NONPROD_ACK=NON_PRODUCTION_ONLY
+SAKTHIAI_EVIDENCE_ENVIRONMENT=<explicit non-production label, e.g. p3-preview>
 SAKTHIAI_WEBHOOK_ENDPOINT=https://<non-production-host>/api/v1/agents/external-proposals/evaluate
+SAKTHIAI_WEBHOOK_SECRET=<runtime secret; never pass on command line>
 SAKTHIAI_WEBHOOK_AGENT_ID=<allowlisted machine identity>
 SAKTHIAI_WEBHOOK_TENANT_ID=<allowlisted non-production tenant>
 ```
 
+The preflight refuses to pass when:
+
+- the acknowledgement is missing
+- the environment label is `prod`, `production` or `live`
+- the endpoint is not HTTPS
+- the endpoint is localhost
+- the runtime secret is missing/weak
+- the public SakthiAI contract endpoint is unavailable
+- the webhook is disabled
+- agent/tenant scope is not configured
+- durable replay is not available
+- D1 replay state is not `AVAILABLE`
+- the contract permits anything beyond `read_only`
+- requested execution is not `dry_run`
+- the contract reports external side effects
+- an executor is bound
+
+The preflight never prints the configured secret.
+
+A passing preflight is a prerequisite, not production certification.
+
+## Single-run client
+
+`scripts/signed-webhook-client.mjs`
+
 Example:
 
 ```bash
-node scripts/signed-webhook-client.mjs \
+npm run client:webhook -- \
   --task-id p3_manual_001 \
   --action "Read the permitted non-production target and return evidence only" \
   --rationale "Controlled funding-readiness external-client evidence run" \
@@ -59,10 +83,10 @@ There is no command-line option to request write or execute mode.
 
 Minimum trial count is hard-bounded to 20.
 
-Example:
+After `npm run preflight:p3` passes, run:
 
 ```bash
-node scripts/run-real-client-benchmark.mjs \
+npm run benchmark:real-client -- \
   --trials 20 \
   --check-replay \
   --target-system github \
@@ -70,96 +94,73 @@ node scripts/run-real-client-benchmark.mjs \
   --output evidence/funding-readiness/signed-webhook-p3-real-client.json
 ```
 
-With `--check-replay`, each accepted signed proposal is immediately replayed with the same nonce. A properly configured P2 durable replay store should reject the replay with HTTP 409 / `AGENT_WEBHOOK_REPLAY_DETECTED`.
+With `--check-replay`, each accepted signed proposal is immediately replayed with the same nonce. A correctly configured durable replay store should reject it with HTTP 409 / `AGENT_WEBHOOK_REPLAY_DETECTED`.
 
-## Evidence report
+## Evidence report and claim gates
 
 The runner records:
 
-- timestamp
-- endpoint (but not secret)
-- agent ID
-- tenant ID
-- trial count
-- accepted count
-- failed count
+- endpoint, agent ID and tenant ID but not secret
+- trial counts and outcomes
 - replay attempts/rejections
 - unique evidence hashes
-- p50/p95/max observed client latency
+- p50/p95/max client-observed latency
 - per-trial status/code/decision/evidence hash
-- explicit `productionReadyClaim:false`
+- `productionReadyClaim:false`
 
-The report refuses to serialize if the configured secret appears in the output.
-
-## Claim gates
-
-The generated report calculates two explicit gates.
-
-### Real external-client evidence
+The report refuses to serialize if the configured secret appears in output.
 
 `qualifiesAsRealExternalClientEvidence=true` only when:
 
-- endpoint is not localhost
+- endpoint is non-localhost HTTPS
 - all trials are accepted
-- every accepted run has a unique evidence hash
+- all accepted runs have unique evidence hashes
 
-### Durable replay evidence
+`qualifiesAsDurableReplayEvidence=true` additionally requires every replay to be rejected.
 
-`qualifiesAsDurableReplayEvidence=true` only when:
+`vendorSpecificAgentClaim=false` remains fixed. A generic signed HTTP client is not a Codex, Claude Code, Gemini or Manus integration.
 
-- endpoint is not localhost
-- replay checking is enabled
-- every replay is rejected
+## HTTPS / localhost boundary
 
-These fields do **not** imply a vendor-specific agent integration.
+Plain HTTP is rejected outside localhost.
 
-`vendorSpecificAgentClaim=false` remains fixed in the report.
-
-## HTTPS boundary
-
-The client rejects plain HTTP endpoints by default.
-
-`--allow-localhost` exists only for automated local integration testing. Reports generated with this flag use:
+`--allow-localhost` exists only for automated integration tests. A localhost report is labelled:
 
 `evidenceMode=LOCAL_HTTP_TEST_CLIENT`
 
 and cannot qualify as real external-client evidence.
 
-A non-localhost evidence run must use HTTPS.
+## CI validation already achieved
 
-## CI validation
+P3 CI starts a separate local fixture server and drives the exact CLI/benchmark over a real TCP/HTTP socket. It requires:
 
-P3 CI starts a separate local fixture server process and drives the exact CLI/benchmark tooling over a real TCP/HTTP socket.
-
-This proves:
-
-- external-process request construction
-- HMAC signing
-- machine/tenant headers
-- network serialization
-- server request verification
-- durable replay rejection
-- evidence-file generation
+- single-run CLI success
+- 20/20 unique proposals accepted
+- 20/20 immediate replays rejected
+- 20 unique evidence hashes
 - no secret leakage
+- all external side effects false
+- all claim gates for real evidence false because the endpoint is localhost
+- the full SakthiAI regression suite green
 
-Because CI uses localhost, it remains **test evidence**, not the real non-production endpoint evidence required for the next funding claim.
+This is integration-test evidence only, not genuine non-production HTTPS evidence.
 
-## Non-production deployment prerequisites
+## Genuine non-production prerequisites
 
-Before running genuine P3 evidence, deliberately configure a non-production SakthiAI Worker/environment with:
+Before running the stronger evidence collection, deliberately configure a non-production SakthiAI Worker/environment with:
 
-1. schema migration `0004_agent_webhook_replay.sql` applied to a non-production D1 database
+1. migration `0004_agent_webhook_replay.sql` on non-production D1
 2. D1 bound as `DB`
 3. `AGENT_WEBHOOK_ENABLED=true`
 4. `AGENT_WEBHOOK_DURABLE_REPLAY_ENABLED=true`
-5. one non-production `AGENT_WEBHOOK_ALLOWED_AGENTS` ID
-6. one non-production `AGENT_WEBHOOK_ALLOWED_TENANTS` ID
-7. strong runtime secret `AGENT_WEBHOOK_SHARED_SECRET`
-8. no external-action executor bindings
-9. no production credentials
-10. HTTPS endpoint
+5. one non-production allowed agent ID
+6. one non-production allowed tenant ID
+7. strong runtime-only `AGENT_WEBHOOK_SHARED_SECRET`
+8. HTTPS endpoint
+9. no production credentials/data
+10. all external action/executor gates disabled
 
-The repository defaults must remain false.
+Repository defaults must remain false.
 
 ## What must NOT be done in P3
 
@@ -178,18 +179,14 @@ Do not enable:
 
 ## Funding evidence standard
 
-After a genuine P3 run, the truthful stronger claim can become:
+Only after a genuine P3 evidence file passes its claim gates may the funding materials state:
 
 > SakthiAI accepted 20+ signed proposals from an external client over HTTPS in a controlled non-production environment, produced distinct verifier/policy evidence receipts, and rejected replay attempts through the durable nonce ledger while external side effects remained disabled.
 
-That statement must only be used if the generated evidence file and environment record support it.
+Until then the truthful statement is:
 
-Until then:
+> **P3 CLIENT KIT + NON-PRODUCTION PREFLIGHT READY; REAL EXTERNAL-CLIENT EVIDENCE NOT YET COLLECTED.**
 
-> **P3 CLIENT KIT READY; REAL EXTERNAL-CLIENT EVIDENCE NOT YET COLLECTED.**
+## Next gate
 
-## Next gate after genuine P3 evidence
-
-Only after owner review of genuine P3 results should we evaluate P4.
-
-The next candidate would be one **isolated-branch repository executor** with explicit approval, tests, evidence and rollback reference. That is not part of P3 and should not be started merely because the client kit exists.
+Only after owner review of genuine P3 results should P4 be considered. A possible P4 would be one isolated-branch repository executor with explicit approval, tests, evidence and rollback reference. It must not be started simply because the P3 tooling exists.
