@@ -7,7 +7,7 @@ const AGENT='external-agent-fixture';
 const TENANT='tenant-fixture';
 const NOW=Date.UTC(2026,8,9,10,30,0);
 const TS=String(Math.floor(NOW/1000));
-const URL='https://sakthiai.test/api/v1/agents/external-proposals/evaluate';
+const ENDPOINT='https://sakthiai.test/api/v1/agents/external-proposals/evaluate';
 
 const env={
   AGENT_WEBHOOK_ENABLED:'true',
@@ -28,7 +28,7 @@ const proposal={
 function bodyOf(value=proposal){return JSON.stringify(value);}
 async function signedRequest({body=bodyOf(),timestamp=TS,agentId=AGENT,tenantId=TENANT,runId='run_ext_001',nonce='nonce_001',secret=SECRET,signatureOverride=null}={}){
   const signature=signatureOverride||await createSignedAgentWebhookSignature(secret,{timestamp,agentId,runId,tenantId,nonce,body});
-  return {request:new Request(URL,{method:'POST',headers:{
+  return {request:new Request(ENDPOINT,{method:'POST',headers:{
     'content-type':'application/json',
     'x-sakthiai-agent-id':agentId,
     'x-sakthiai-agent-run-id':runId,
@@ -58,7 +58,7 @@ assert.equal(result.code,'AGENT_WEBHOOK_SECRET_MISSING_OR_WEAK');
 result=await evaluateSignedAgentWebhook(await req(),{...env,AGENT_WEBHOOK_ALLOWED_AGENTS:''},NOW);
 assert.equal(result.code,'AGENT_WEBHOOK_SCOPE_NOT_CONFIGURED');
 
-result=await evaluateSignedAgentWebhook(new Request(URL,{method:'POST',headers:{'content-type':'application/json'},body:bodyOf()}),env,NOW);
+result=await evaluateSignedAgentWebhook(new Request(ENDPOINT,{method:'POST',headers:{'content-type':'application/json'},body:bodyOf()}),env,NOW);
 assert.equal(result.code,'AGENT_WEBHOOK_HEADERS_REQUIRED');
 assert.equal(result.status,401);
 
@@ -136,7 +136,7 @@ assert.equal(routeBody.contract.scopeConfigured,true);
 assert.equal(JSON.stringify(routeBody).includes(SECRET),false);
 
 // Route-level valid signed request bypasses human Access-JWT by design but is HMAC + scope authenticated.
-url=new URL(URL);
+url=new URL(ENDPOINT);
 const routeTimestamp=String(Math.floor(Date.now()/1000));
 const routeSigned=await signedRequest({timestamp:routeTimestamp,runId:'run_route',nonce:'nonce_route'});
 response=await handleAgentApi(routeSigned.request,env,url,'req_eval');
