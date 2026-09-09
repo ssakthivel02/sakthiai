@@ -1,0 +1,105 @@
+name: SakthiAI P3 Environment Scaffold QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/lib/p3-env-config.mjs'
+      - 'scripts/prepare-p3-nonprod-config.mjs'
+      - 'scripts/lib/p3-evidence-validator.mjs'
+      - 'scripts/validate-p3-evidence.mjs'
+      - 'scripts/test-p3-env-scaffold.mjs'
+      - 'docs/funding-readiness/p3-nonprod-owner-runbook.md'
+      - 'package.json'
+      - '.gitignore'
+      - '.github/workflows/p3-env-scaffold-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p3-env-scaffold-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v5
+
+      - name: Use Node 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - name: Syntax and unit tests
+        run: |
+          node --check scripts/lib/p3-env-config.mjs
+          node --check scripts/prepare-p3-nonprod-config.mjs
+          node --check scripts/lib/p3-evidence-validator.mjs
+          node --check scripts/validate-p3-evidence.mjs
+          npm run test:p3-env
+
+      - name: Generate a dummy nonprod config and prove fail-safe defaults
+        env:
+          SAKTHIAI_EVIDENCE_NONPROD_ACK: NON_PRODUCTION_ONLY
+          SAKTHIAI_EVIDENCE_ENVIRONMENT: ci-funding-evidence-staging
+          SAKTHIAI_P3_D1_DATABASE_NAME: sakthiai-ci-p3-evidence-db
+          SAKTHIAI_P3_D1_DATABASE_ID: 123e4567-e89b-42d3-a456-426614174000
+          SAKTHIAI_WEBHOOK_AGENT_ID: ci-evidence-client
+          SAKTHIAI_WEBHOOK_TENANT_ID: ci-evidence-tenant
+        run: |
+          npm run prepare:p3-env > /tmp/p3-config-result.json
+          grep -Fq 'SAKTHIAI_P3_NONPROD_CONFIG_READY' /tmp/p3-config-result.json
+          grep -Fq '"AGENT_WEBHOOK_ENABLED": "true"' wrangler.p3-evidence.generated.jsonc
+          grep -Fq '"AGENT_WEBHOOK_DURABLE_REPLAY_ENABLED": "true"' wrangler.p3-evidence.generated.jsonc
+          grep -Fq '"AGENT_EXECUTOR_BINDINGS_ENABLED": "false"' wrangler.p3-evidence.generated.jsonc
+          grep -Fq '"AGENT_EXTERNAL_ACTIONS_ENABLED": "false"' wrangler.p3-evidence.generated.jsonc
+          if grep -Fq 'AGENT_WEBHOOK_SHARED_SECRET' wrangler.p3-evidence.generated.jsonc; then
+            echo 'Generated config must never contain the webhook secret binding/value' >&2
+            exit 1
+          fi
+          echo 'SAKTHIAI_P3_CONFIG_SECRET_BOUNDARY_PASS'
+
+      - name: Prove production labels fail closed
+        env:
+          SAKTHIAI_EVIDENCE_NONPROD_ACK: NON_PRODUCTION_ONLY
+          SAKTHIAI_EVIDENCE_ENVIRONMENT: production
+          SAKTHIAI_P3_D1_DATABASE_NAME: sakthiai-ci-p3-evidence-db
+          SAKTHIAI_P3_D1_DATABASE_ID: 123e4567-e89b-42d3-a456-426614174000
+          SAKTHIAI_WEBHOOK_AGENT_ID: ci-evidence-client
+          SAKTHIAI_WEBHOOK_TENANT_ID: ci-evidence-tenant
+        shell: bash
+        run: |
+          set +e
+          npm run prepare:p3-env > /tmp/prod-out.txt 2>&1
+          status=$?
+          set -e
+          test "$status" -ne 0
+          grep -Fq 'P3_PRODUCTION_LABEL_REJECTED' /tmp/prod-out.txt
+          echo 'SAKTHIAI_P3_PRODUCTION_LABEL_REJECTION_PASS'
+
+      - name: Full SakthiAI regression suite
+        run: npm test
+
+      - name: Source/evidence boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'wrangler.p3-evidence.generated.jsonc' .gitignore
+          grep -Fq 'productionReady:false' scripts/lib/p3-evidence-validator.mjs
+          grep -Fq 'vendorSpecificAgentClaim:false' scripts/lib/p3-evidence-validator.mjs
+          grep -Fq "AGENT_EXECUTOR_BINDINGS_ENABLED:'false'" scripts/lib/p3-env-config.mjs
+          grep -Fq "AGENT_EXTERNAL_ACTIONS_ENABLED:'false'" scripts/lib/p3-env-config.mjs
+          grep -Fq '20+ real external-client runs completed: **NO' docs/funding-readiness/real-client-evidence-p3.md
+          echo 'SAKTHIAI_P3_ENV_EVIDENCE_BOUNDARY_PASS'
+
+      - name: QA summary
+        if: always()
+        run: |
+          echo '### SakthiAI P3 Environment Scaffold' >> "$GITHUB_STEP_SUMMARY"
+          echo '- secret-safe generated Wrangler config checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- production-label rejection checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- external write/executor gates remain false' >> "$GITHUB_STEP_SUMMARY"
+          echo '- strict 20+ run evidence claim validator checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- full SakthiAI regression suite checked' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Cloudflare account provisioning is intentionally outside this PR' >> "$GITHUB_STEP_SUMMARY"
