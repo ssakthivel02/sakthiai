@@ -5,6 +5,7 @@ const contract=trustedActionGatewayContract();
 assert.equal(contract.phase,'P0_PROVIDER_NEUTRAL_POLICY_AND_DRY_RUN_PROOF');
 assert.equal(contract.externalAgentBindingImplemented,false);
 assert.equal(contract.externalSideEffectExecutionImplemented,false);
+assert.equal(contract.invariants.isolatedBranchRequiredForRepositoryWrites,true);
 assert.equal(contract.invariants.directMainWriteAllowed,false);
 assert.equal(contract.invariants.forcePushAllowed,false);
 assert.equal(contract.invariants.dryRunOnly,true);
@@ -31,6 +32,10 @@ assert.equal(readOnly.sideEffects,false);
 assert.equal(readOnly.evidenceHash.length,64);
 assert.equal(readOnly.executorContract.id,'sandbox_code');
 
+const executeRequested=await evaluateTrustedActionProposal({...base,requestedExecution:'execute'},{});
+assert.equal(executeRequested.decision,'BLOCKED');
+assert.equal(executeRequested.code,'TRUSTED_ACTION_P0_EXECUTION_FORBIDDEN');
+
 const verifierPending=await evaluateTrustedActionProposal({...base,verifierState:'pending'},{});
 assert.equal(verifierPending.decision,'VERIFIER_REQUIRED');
 const verifierFailed=await evaluateTrustedActionProposal({...base,verifierState:'failed'},{});
@@ -38,6 +43,9 @@ assert.equal(verifierFailed.decision,'BLOCKED');
 assert.equal(verifierFailed.code,'TRUSTED_ACTION_VERIFIER_FAILED');
 
 const repoBase={...base,sourceAgent:'codex-adapter-fixture',sourceRunId:'run_repo_001',actionClass:'repository_write',action:'Prepare a code change on an isolated feature branch.',rationale:'The proposed change is required by the approved task.',target:{system:'github',resource:'ssakthivel02/sakthiai',branch:'funding-readiness/demo'},idempotencyKey:'idem_repo_001',rollbackPlan:'Delete or revert the isolated branch commit; never rewrite main.'};
+const repoNoBranch=await evaluateTrustedActionProposal({...repoBase,target:{system:'github',resource:'ssakthivel02/sakthiai'},approvalId:'apr_repo',approvalState:'approved'},{externalActionsEnabled:true});
+assert.equal(repoNoBranch.decision,'BLOCKED');
+assert.equal(repoNoBranch.code,'TRUSTED_ACTION_ISOLATED_BRANCH_REQUIRED');
 const repoNeedsApproval=await evaluateTrustedActionProposal(repoBase,{externalActionsEnabled:true});
 assert.equal(repoNeedsApproval.decision,'APPROVAL_REQUIRED');
 const repoMain=await evaluateTrustedActionProposal({...repoBase,target:{...repoBase.target,branch:'main'},approvalId:'apr_repo',approvalState:'approved'},{externalActionsEnabled:true});
@@ -83,6 +91,7 @@ assert.equal(new Set(matrix.map(x=>x.evidenceHash)).size,24);
 console.log(JSON.stringify({
   marker:'SAKTHIAI_TRUSTED_ACTION_GATEWAY_P0_PASS',
   policyCases:24,
+  hardBlockCases:['execute_request','verifier_failed','repository_without_isolated_branch','repository_main','force_push'],
   liveExternalAgentIntegration:false,
   externalSideEffects:false,
   decision:'P0_POLICY_AND_DRY_RUN_PROOF_READY'
