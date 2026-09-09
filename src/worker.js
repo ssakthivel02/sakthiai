@@ -21,7 +21,7 @@ function securityStatus(code){
   if(String(code||'').startsWith('ACCESS_JWT_')||code==='IDENTITY_REQUIRED')return 401;
   return 503;
 }
-function policy(env){const executors=executorContractRegistry();return {
+export function policy(env){const executors=executorContractRegistry();return {
   product:'SakthiAI',
   runtimeMode:bool(env.AI_RUNTIME_ENABLED)?'free-first-enabled':'disabled',
   persistence:persistenceState(env).state,
