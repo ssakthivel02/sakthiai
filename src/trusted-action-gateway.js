@@ -35,6 +35,7 @@ export function trustedActionGatewayContract(){
     invariants:{
       verifierRequired:true,
       approvalRequiredForConsequentialActions:true,
+      isolatedBranchRequiredForRepositoryWrites:true,
       directMainWriteAllowed:false,
       forcePushAllowed:false,
       dryRunOnly:true,
@@ -87,7 +88,9 @@ function policyDecision(proposal,runtime={}){
   if(!contract)return {decision:'INVALID',code:'TRUSTED_ACTION_CONTRACT_NOT_FOUND'};
   const risk=riskFor(proposal.actionClass);
   const branch=normalizeBranch(proposal.target?.branch);
+  if(proposal.requestedExecution!=='dry_run')return {decision:'BLOCKED',code:'TRUSTED_ACTION_P0_EXECUTION_FORBIDDEN',risk,contract};
   if(proposal.forcePush)return {decision:'BLOCKED',code:'TRUSTED_ACTION_FORCE_PUSH_FORBIDDEN',risk,contract};
+  if(proposal.actionClass==='repository_write'&&!branch)return {decision:'BLOCKED',code:'TRUSTED_ACTION_ISOLATED_BRANCH_REQUIRED',risk,contract};
   if(proposal.actionClass==='repository_write'&&['main','master'].includes(branch))return {decision:'BLOCKED',code:'TRUSTED_ACTION_DIRECT_MAIN_WRITE_FORBIDDEN',risk,contract};
   if(proposal.verifierState==='failed')return {decision:'BLOCKED',code:'TRUSTED_ACTION_VERIFIER_FAILED',risk,contract};
   if(proposal.verifierState!=='passed')return {decision:'VERIFIER_REQUIRED',code:'TRUSTED_ACTION_VERIFIER_NOT_PASSED',risk,contract};
@@ -105,7 +108,7 @@ export async function evaluateTrustedActionProposal(input={},runtime={}){
     ok:policy.decision!=='INVALID',version:VERSION,decision:policy.decision,code:policy.code,
     executed:false,sideEffects:false,externalAgentBindingImplemented:false,externalSideEffectExecutionImplemented:false,
     proposal:{...proposal,target:{...proposal.target}},
-    policy:{riskLevel:policy.risk?.level||null,approvalRequired:policy.risk?.approvalRequired??null,consequential:policy.risk?.consequential??null,directMainWriteAllowed:false,forcePushAllowed:false,dryRunOnly:true},
+    policy:{riskLevel:policy.risk?.level||null,approvalRequired:policy.risk?.approvalRequired??null,consequential:policy.risk?.consequential??null,isolatedBranchRequiredForRepositoryWrites:true,directMainWriteAllowed:false,forcePushAllowed:false,dryRunOnly:true},
     executorContract:policy.contract?{id:policy.contract.id,label:policy.contract.label,state:policy.contract.state,requiredControls:[...policy.contract.requiredControls]}:null,
     runtime:{externalActionsEnabled:runtime.externalActionsEnabled===true,executorBindingEnabled:runtime.executorBindingEnabled===true,executorBound:runtime.executorBound===true}
   };
@@ -125,7 +128,7 @@ export async function evaluateTrustedActionProposal(input={},runtime={}){
     actionClass:proposal.actionClass,action:proposal.action,target:proposal.target,decision:base.decision,code:base.code,
     verifierId:proposal.verifierId,verifierState:proposal.verifierState,approvalId:proposal.approvalId||null,approvalState:proposal.approvalState,
     idempotencyKey:proposal.idempotencyKey,evidenceRequirements:proposal.evidenceRequirements,rollbackPlan:proposal.rollbackPlan,
-    executorContractId:base.executorContract?.id||null,executed:false,sideEffects:false
+    requestedExecution:proposal.requestedExecution,executorContractId:base.executorContract?.id||null,executed:false,sideEffects:false
   };
   base.evidenceHash=await sha256(evidenceCore);
   base.evidence={...evidenceCore,sha256:base.evidenceHash};
